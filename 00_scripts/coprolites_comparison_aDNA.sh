@@ -6,8 +6,8 @@
 #SBATCH --mem=1000G
 #SBATCH --mail-user=pierrelouis.stenger@gmail.com
 #SBATCH --mail-type=ALL
-#SBATCH --error="/home/plstenge/coprolites/00_scripts/coprolites_5lots.err"
-#SBATCH --output="/home/plstenge/coprolites/00_scripts/coprolites_5lots.out"
+#SBATCH --error="/home/plstenge/coprolites_comparison/00_scripts/coprolites_5lots.err"
+#SBATCH --output="/home/plstenge/coprolites_comparison/00_scripts/coprolites_5lots.out"
 
 ################################################################################
 # Pipeline d'analyse aDNA - Projet Coprolites - 5 LOTS
@@ -18,8 +18,8 @@
 # Description:
 # Ce pipeline analyse 5 lots de séquençage de coprolites:
 #
-# LOT 1: Recette1 - Illumina (5 échantillons) -- /home/plstenge/coprolites/01_raw_data/Illumina_*
-# LOT 2: Recette1 - Aviti sans démultiplexage (3 échantillons) -- /home/plstenge/coprolites/01_raw_data/Aviti_*
+# LOT 1: Recette1 - Illumina (5 échantillons) -- /home/plstenge/coprolites_comparison/01_raw_data/Illumina_*
+# LOT 2: Recette1 - Aviti sans démultiplexage (3 échantillons) -- /home/plstenge/coprolites_comparison/01_raw_data/Aviti_*
 # LOT 3: Recette1 - Aviti avec démultiplexage - 2 runs concaténés (3 échantillons)
 #     /storage/groups/gdec/shared_paleo/E1531_final/run1_20250320_AV241601_E1531_Ps5Lane1_Ps6Lane2/[dossier]
 #     /storage/groups/gdec/shared_paleo/E1531_final/run2_20250414_AV241601_E1531_Ps5_Ps6_14042025/[dossier]
@@ -58,7 +58,7 @@ RUN1="/storage/groups/gdec/shared_paleo/E1531_final/run1_20250320_AV241601_E1531
 RUN2="/storage/groups/gdec/shared_paleo/E1531_final/run2_20250414_AV241601_E1531_Ps5_Ps6_14042025"
 RUN3="/storage/groups/gdec/shared_paleo/E1531_final/run3_20251008_AV241601_E1531_Ps7_Ps8"
 RUN4="/storage/groups/gdec/shared_paleo/E1531_final/run4_20251104_AV241601_E1531_Ps7_Ps8_04112025"
-RAW_HOME="/home/plstenge/coprolites/01_raw_data"
+RAW_HOME="/home/plstenge/coprolites_comparison/01_raw_data"
 
 echo "=========================================="
 echo "Pipeline aDNA - Coprolites - 5 LOTS"
@@ -156,7 +156,7 @@ echo ""
 echo "=== LOT 1: Organisation Illumina Recette1 ==="
 echo ""
 
-LOT1_SOURCE="/home/plstenge/coprolites/01_raw_data"
+LOT1_SOURCE="/home/plstenge/coprolites_comparison/01_raw_data"
 LOT1_DEST="${BASE_DIR}/01_raw_data/Lot1_Illumina_R1"
 
 for sample in cop408 cop410 cop412 cop414 cop417; do
@@ -189,7 +189,7 @@ echo ""
 echo "=== LOT 2: Organisation Aviti no demux Recette1 ==="
 echo ""
 
-LOT2_SOURCE="/home/plstenge/coprolites/01_raw_data"
+LOT2_SOURCE="/home/plstenge/coprolites_comparison/01_raw_data"
 LOT2_DEST="${BASE_DIR}/01_raw_data/Lot2_Aviti_no_demux_R1"
 
 for sample in cop408 cop412 cop414; do
@@ -797,13 +797,13 @@ LOT 1: Recette1 - Illumina
   • Technologie: Illumina
   • Protocole: recipes-ShortInsert (2x150bp)
   • Échantillons: cop408, cop410, cop412, cop414, cop417 (5 échantillons)
-  • Source: /home/plstenge/coprolites/01_raw_data
+  • Source: /home/plstenge/coprolites_comparison/01_raw_data
 
 LOT 2: Recette1 - Aviti sans démultiplexage
   • Technologie: Aviti (no demultiplexing)
   • Protocole: recipes-ShortInsert (2x150bp)
   • Échantillons: cop408, cop412, cop414 (3 échantillons)
-  • Source: /home/plstenge/coprolites/01_raw_data
+  • Source: /home/plstenge/coprolites_comparison/01_raw_data
 
 LOT 3: Recette1 - Aviti avec démultiplexage (2 runs concaténés)
   • Technologie: Aviti (demultiplexing)
@@ -942,7 +942,7 @@ COMMANDES R POUR ANALYSES COMPLÉMENTAIRES
 # Chargement du tableau récapitulatif
 library(tidyverse)
 
-summary <- read_tsv("/home/plstenge/coprolites/11_summary_tables/sequences_summary.tsv")
+summary <- read_tsv("/home/plstenge/coprolites_comparison/11_summary_tables/sequences_summary.tsv")
 
 # Visualisation du nombre de séquences par lot
 summary %>%
@@ -982,10 +982,10 @@ summary %>%
        y = "%GC")
 
 # Chargement et comparaison des tables MPA
-mpa_lot1 <- read_tsv("/home/plstenge/coprolites/10_mpa_tables/Lot1_Illumina_R1/combined_all.tsv")
-mpa_lot2 <- read_tsv("/home/plstenge/coprolites/10_mpa_tables/Lot2_Aviti_no_demux_R1/combined_all.tsv")
-mpa_lot3 <- read_tsv("/home/plstenge/coprolites/10_mpa_tables/Lot3_Aviti_demux_R1/combined_all.tsv")
-mpa_lot4 <- read_tsv("/home/plstenge/coprolites/10_mpa_tables/Lot4_Aviti_R2/combined_all.tsv")
+mpa_lot1 <- read_tsv("/home/plstenge/coprolites_comparison/10_mpa_tables/Lot1_Illumina_R1/combined_all.tsv")
+mpa_lot2 <- read_tsv("/home/plstenge/coprolites_comparison/10_mpa_tables/Lot2_Aviti_no_demux_R1/combined_all.tsv")
+mpa_lot3 <- read_tsv("/home/plstenge/coprolites_comparison/10_mpa_tables/Lot3_Aviti_demux_R1/combined_all.tsv")
+mpa_lot4 <- read_tsv("/home/plstenge/coprolites_comparison/10_mpa_tables/Lot4_Aviti_R2/combined_all.tsv")
 
 # Richesse taxonomique par lot
 richness <- tibble(
@@ -1017,7 +1017,7 @@ INFORMATIONS TECHNIQUES
 ================================================================================
 
 Base de données Kraken2: /home/plstenge/k2_core_nt_20250609
-KrakenTools: /home/plstenge/coprolites/08_kraken2/KrakenTools
+KrakenTools: /home/plstenge/coprolites_comparison/08_kraken2/KrakenTools
 Environnement conda: coprolites-pipeline
 
 Threads utilisés: 36
