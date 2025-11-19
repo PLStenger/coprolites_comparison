@@ -1,259 +1,342 @@
 #!/bin/bash
 
-#SBATCH --job-name=coprolites_aDNA
+#SBATCH --job-name=coprolites_5lots
 #SBATCH --ntasks=1
 #SBATCH -p smp
 #SBATCH --mem=1000G
 #SBATCH --mail-user=pierrelouis.stenger@gmail.com
 #SBATCH --mail-type=ALL
-#SBATCH --error="/home/plstenge/coprolites_comparison/00_scripts/coprolites_comparison_aDNA.err"
-#SBATCH --output="/home/plstenge/coprolites_comparison/00_scripts/coprolites_comparison_aDNA.out"
+#SBATCH --error="/home/plstenge/coprolites/00_scripts/coprolites_5lots.err"
+#SBATCH --output="/home/plstenge/coprolites/00_scripts/coprolites_5lots.out"
 
 ################################################################################
-# Pipeline d'analyse aDNA - Projet Coprolites
-# Comparaison de recettes de séquençage
+# Pipeline d'analyse aDNA - Projet Coprolites - 5 LOTS
+# Comparaison complète: 2 recettes × 2 technologies × démultiplexage × 2 longueurs
 # Author: Pierre-Louis Stenger
 # Date: November 2025
 #
 # Description:
-# Ce pipeline analyse des échantillons de coprolites séquencés avec 2 recettes:
-# - Recette1 (R1): recipes-ShortInsert (2x150bp) - Aviti uniquement
-# - Recette2 (R2): recipes-v3.3.x-ShortInsert-SmallFragmentRecovery (2x150bp)
-#   → Aviti + Illumina
+# Ce pipeline analyse 5 lots de séquençage de coprolites:
 #
-# Échantillons analysés:
-# - cop408, cop410, cop412, cop414, cop417
+# LOT 1: Recette1 - Illumina (5 échantillons) -- /home/plstenge/coprolites/01_raw_data/Illumina_*
+# LOT 2: Recette1 - Aviti sans démultiplexage (3 échantillons) -- /home/plstenge/coprolites/01_raw_data/Aviti_*
+# LOT 3: Recette1 - Aviti avec démultiplexage - 2 runs concaténés (3 échantillons)
+#     /storage/groups/gdec/shared_paleo/E1531_final/run1_20250320_AV241601_E1531_Ps5Lane1_Ps6Lane2/[dossier]
+#     /storage/groups/gdec/shared_paleo/E1531_final/run2_20250414_AV241601_E1531_Ps5_Ps6_14042025/[dossier]
+# LOT 4: Recette2 - Aviti fragments courts 2x150bp (5 échantillons) -- /storage/groups/gdec/shared_paleo/E1531_final/run3_20251008_AV241601_E1531_Ps7_Ps8/[dossier]
+# LOT 5: Recette2 - Aviti fragments courts 2x75bp  (5 échantillons) -- /storage/groups/gdec/shared_paleo/E1531_final/run4_20251104_AV241601_E1531_Ps7_Ps8_04112025/[dossier]
 #
-# Technologies:
-# - Recette1: Aviti uniquement
-# - Recette2: Aviti + Illumina (analysés séparément et combinés)
+# Échantillons: cop408, cop410, cop412, cop414, cop417
 ################################################################################
 
 set -eo pipefail
 
-################################################################################
-# CONFIGURATION GLOBALE
-################################################################################
-
-# Chemins de base
-BASE_DIR="/home/plstenge/coprolites_comparison"
-RECIPE1_BASE="/storage/groups/gdec/shared_paleo/E1531_final/run3_20251008_AV241601_E1531_Ps7_Ps8"
-RECIPE2_BASE="/home/plstenge/coprolites_comparison/01_raw_data"
-
-# Outils BBMap (chemins absolus)
+BASE_DIR="/home/plstenge/coprolites"
 BBDUK="/home/plstenge/bbmap/bbduk.sh"
 CLUMPIFY="/home/plstenge/bbmap/clumpify.sh"
 PHIX="/home/plstenge/bbmap/resources/phix174_ill.ref.fa.gz"
-
-# Base de données Kraken2
 KRAKEN2_DB="/home/plstenge/k2_core_nt_20250609"
-
-# KrakenTools
 KRAKENTOOLS_DIR="${BASE_DIR}/07_kraken2/KrakenTools"
-
-# Paramètres
 THREADS=36
 
-# Définition des échantillons
-declare -a SAMPLES=("cop408" "cop410" "cop412" "cop414" "cop417")
+# Définition des lots et mapping
+LOTS=("Lot1_Illumina_R1" "Lot2_Aviti_no_demux_R1" "Lot3_Aviti_demux_R1" "Lot4_Aviti_R2_150bp" "Lot5_Aviti_R2_75bp")
+declare -A LOT_SAMPLES
+LOT_SAMPLES["Lot1_Illumina_R1"]="cop408 cop410 cop412 cop414 cop417"
+LOT_SAMPLES["Lot2_Aviti_no_demux_R1"]="cop408 cop412 cop414"
+LOT_SAMPLES["Lot3_Aviti_demux_R1"]="cop408 cop412 cop414"
+LOT_SAMPLES["Lot4_Aviti_R2_150bp"]="cop408 cop410 cop412 cop414 cop417"
+LOT_SAMPLES["Lot5_Aviti_R2_75bp"]="cop408 cop410 cop412 cop414 cop417"
 
-# Définition des IDs de dossiers pour Recette1 (Aviti)
-declare -A RECIPE1_FOLDERS=(
-    ["cop408"]="474_cop408"
-    ["cop410"]="475_cop410"
-    ["cop412"]="476_cop412"
-    ["cop414"]="477_cop414"
-    ["cop417"]="478_cop417"
-)
+# Mapping dossiers pour demux + SmallFragment
+declare -A RUN3_FOLDERS=( ["cop408"]=474_cop408 ["cop410"]=475_cop410 ["cop412"]=476_cop412 ["cop414"]=477_cop414 ["cop417"]=478_cop417 )
+declare -A RUN4_FOLDERS=( ["cop408"]=474_cop408 ["cop410"]=475_cop410 ["cop412"]=476_cop412 ["cop414"]=477_cop414 ["cop417"]=478_cop417 )
+declare -A DEMUX_FOLDERS=( ["cop408"]=474_cop408 ["cop412"]=476_cop412 ["cop414"]=477_cop414 )
+
+# Chemins sources
+RUN1="/storage/groups/gdec/shared_paleo/E1531_final/run1_20250320_AV241601_E1531_Ps5Lane1_Ps6Lane2"
+RUN2="/storage/groups/gdec/shared_paleo/E1531_final/run2_20250414_AV241601_E1531_Ps5_Ps6_14042025"
+RUN3="/storage/groups/gdec/shared_paleo/E1531_final/run3_20251008_AV241601_E1531_Ps7_Ps8"
+RUN4="/storage/groups/gdec/shared_paleo/E1531_final/run4_20251104_AV241601_E1531_Ps7_Ps8_04112025"
+RAW_HOME="/home/plstenge/coprolites/01_raw_data"
 
 echo "=========================================="
-echo "Pipeline aDNA - Coprolites"
+echo "Pipeline aDNA - Coprolites - 5 LOTS"
 echo "Date de début: $(date)"
 echo "=========================================="
 
 ################################################################################
-# ACTIVATION DE L'ENVIRONNEMENT CONDA UNIQUE
+# ACTIVATION ENVIRONNEMENT
 ################################################################################
-
-echo ""
-echo "=== Activation de l'environnement conda unique ==="
-echo ""
-
-# Chargement du module conda
 module load conda/4.12.0
 source ~/.bashrc
+conda activate metagenomics
 
-# Activation de l'environnement unique contenant tous les outils
-# IMPORTANT: Cet environnement doit être créé au préalable avec:
-# conda create -n coprolites-pipeline -c bioconda -c conda-forge \
-#   fastqc multiqc bbmap fastuniq fastp kraken2 krona python=3.9
-# pip install krakentools (ou installation manuelle des scripts python)
-
-conda activate coprolites-pipeline
-
-echo "Environnement conda activé: coprolites-pipeline"
-echo "Tous les outils seront utilisés depuis cet environnement unique."
-
-################################################################################
-# ÉTAPE 0: Création de l'arborescence et organisation des données
-################################################################################
-
-echo ""
-echo "=== ÉTAPE 0: Préparation de l'arborescence ==="
-echo ""
-
-# Création de la structure de dossiers
+# Arborescence
+for lot in "${LOTS[@]}"; do
+  mkdir -p "${BASE_DIR}/01_raw_data/${lot}"
+  mkdir -p "${BASE_DIR}/02_quality_check_raw/${lot}"
+  mkdir -p "${BASE_DIR}/03_bbduk/${lot}"
+  mkdir -p "${BASE_DIR}/04_fastuniq/${lot}"
+  mkdir -p "${BASE_DIR}/05_clumpify/${lot}"
+  mkdir -p "${BASE_DIR}/06_fastp/${lot}"
+  mkdir -p "${BASE_DIR}/07_quality_check_clean/${lot}"
+  mkdir -p "${BASE_DIR}/08_kraken2/${lot}"
+  mkdir -p "${BASE_DIR}/09_krona/${lot}"
+  mkdir -p "${BASE_DIR}/10_mpa_tables/${lot}"
+done
 mkdir -p "${BASE_DIR}/00_scripts"
-mkdir -p "${BASE_DIR}/01_raw_data/recette1_aviti"
-mkdir -p "${BASE_DIR}/01_raw_data/recette2_aviti"
-mkdir -p "${BASE_DIR}/01_raw_data/recette2_illumina"
-mkdir -p "${BASE_DIR}/01_raw_data/recette2_aviti_illumina_combined"
-mkdir -p "${BASE_DIR}/02_quality_check"
-mkdir -p "${BASE_DIR}/03_bbduk"
-mkdir -p "${BASE_DIR}/04_fastuniq"
-mkdir -p "${BASE_DIR}/05_clumpify"
-mkdir -p "${BASE_DIR}/06_fastp"
-mkdir -p "${BASE_DIR}/07_kraken2"
-mkdir -p "${BASE_DIR}/08_krona"
-mkdir -p "${BASE_DIR}/09_mpa_tables"
-
-echo "Arborescence créée."
+mkdir -p "${BASE_DIR}/11_summary_tables"
+################################################################################
+# ORGANISATION DES DONNÉES
+################################################################################
+# -------- Lot 1 --------
+echo ""; echo "--- LOT 1: Illumina Recette1 ---"
+LOT1_DEST="${BASE_DIR}/01_raw_data/Lot1_Illumina_R1"
+for sample in ${LOT_SAMPLES["Lot1_Illumina_R1"]}; do
+  R1="${RAW_HOME}/Illumina_${sample}_R1.fastq.gz"
+  R2="${RAW_HOME}/Illumina_${sample}_R2.fastq.gz"
+  ln -sf "$R1" "${LOT1_DEST}/${sample}_R1.fastq.gz"
+  ln -sf "$R2" "${LOT1_DEST}/${sample}_R2.fastq.gz"
+done
+# -------- Lot 2 --------
+echo ""; echo "--- LOT 2: Aviti no demux Recette1 ---"
+LOT2_DEST="${BASE_DIR}/01_raw_data/Lot2_Aviti_no_demux_R1"
+for sample in ${LOT_SAMPLES["Lot2_Aviti_no_demux_R1"]}; do
+  R1="${RAW_HOME}/Aviti_${sample}_R1.fastq.gz"
+  R2="${RAW_HOME}/Aviti_${sample}_R2.fastq.gz"
+  ln -sf "$R1" "${LOT2_DEST}/${sample}_R1.fastq.gz"
+  ln -sf "$R2" "${LOT2_DEST}/${sample}_R2.fastq.gz"
+done
+# -------- Lot 3 --------
+echo ""; echo "--- LOT 3: Aviti demux Recette1 ---"
+LOT3_DEST="${BASE_DIR}/01_raw_data/Lot3_Aviti_demux_R1"
+for sample in ${LOT_SAMPLES["Lot3_Aviti_demux_R1"]}; do
+  fldr="${DEMUX_FOLDERS[$sample]}"
+  R1a="$RUN1/${fldr}/${fldr}_R1.fastq.gz"
+  R2a="$RUN1/${fldr}/${fldr}_R2.fastq.gz"
+  R1b="$RUN2/${fldr}/${fldr}_R1.fastq.gz"
+  R2b="$RUN2/${fldr}/${fldr}_R2.fastq.gz"
+  outR1="${LOT3_DEST}/${sample}_R1.fastq.gz"
+  outR2="${LOT3_DEST}/${sample}_R2.fastq.gz"
+  if [[ -f "$R1a" ]] && [[ -f "$R1b" ]]; then cat "$R1a" "$R1b" > "$outR1"; fi
+  if [[ -f "$R2a" ]] && [[ -f "$R2b" ]]; then cat "$R2a" "$R2b" > "$outR2"; fi
+  if [[ ! -f "$outR1" ]] && [[ -f "$R1a" ]]; then ln -sf "$R1a" "$outR1"; elif [[ ! -f "$outR1" ]] && [[ -f "$R1b" ]]; then ln -sf "$R1b" "$outR1"; fi
+  if [[ ! -f "$outR2" ]] && [[ -f "$R2a" ]]; then ln -sf "$R2a" "$outR2"; elif [[ ! -f "$outR2" ]] && [[ -f "$R2b" ]]; then ln -sf "$R2b" "$outR2"; fi
+done
+# -------- Lot 4 --------
+echo ""; echo "--- LOT 4: Aviti Recette2 2x150bp ---"
+LOT4_DEST="${BASE_DIR}/01_raw_data/Lot4_Aviti_R2_150bp"
+for sample in ${LOT_SAMPLES["Lot4_Aviti_R2_150bp"]}; do
+  fldr="${RUN3_FOLDERS[$sample]}"
+  R1="$RUN3/${fldr}/${fldr}_R1.fastq.gz"
+  R2="$RUN3/${fldr}/${fldr}_R2.fastq.gz"
+  ln -sf "$R1" "${LOT4_DEST}/${sample}_R1.fastq.gz"
+  ln -sf "$R2" "${LOT4_DEST}/${sample}_R2.fastq.gz"
+done
+# -------- Lot 5 --------
+echo ""; echo "--- LOT 5: Aviti Recette2 2x75bp ---"
+LOT5_DEST="${BASE_DIR}/01_raw_data/Lot5_Aviti_R2_75bp"
+for sample in ${LOT_SAMPLES["Lot5_Aviti_R2_75bp"]}; do
+  fldr="${RUN4_FOLDERS[$sample]}"
+  R1="$RUN4/${fldr}/${fldr}_R1.fastq.gz"
+  R2="$RUN4/${fldr}/${fldr}_R2.fastq.gz"
+  ln -sf "$R1" "${LOT5_DEST}/${sample}_R1.fastq.gz"
+  ln -sf "$R2" "${LOT5_DEST}/${sample}_R2.fastq.gz"
+done
+################################################################################
+# PIPELINE COMMUN TOUTES LOTS
+################################################################################
 
 ################################################################################
-# Copie/liens symboliques des données Recette 1 (Aviti uniquement)
+# ORGANISATION DES DONNÉES - LOT 1: Illumina Recette1
 ################################################################################
 
 echo ""
-echo "=== Copie des données Recette1 (Aviti) ==="
+echo "=== LOT 1: Organisation Illumina Recette1 ==="
 echo ""
 
-for sample in "${SAMPLES[@]}"; do
-    folder="${RECIPE1_FOLDERS[$sample]}"
-    source_dir="${RECIPE1_BASE}/${folder}"
+LOT1_SOURCE="/home/plstenge/coprolites/01_raw_data"
+LOT1_DEST="${BASE_DIR}/01_raw_data/Lot1_Illumina_R1"
+
+for sample in cop408 cop410 cop412 cop414 cop417; do
+    R1_source="${LOT1_SOURCE}/Illumina_${sample}_R1.fastq.gz"
+    R2_source="${LOT1_SOURCE}/Illumina_${sample}_R2.fastq.gz"
     
-    R1_source="${source_dir}/${folder}_R1.fastq.gz"
-    R2_source="${source_dir}/${folder}_R2.fastq.gz"
-    
-    R1_dest="${BASE_DIR}/01_raw_data/recette1_aviti/${sample}_R1.fastq.gz"
-    R2_dest="${BASE_DIR}/01_raw_data/recette1_aviti/${sample}_R2.fastq.gz"
+    R1_dest="${LOT1_DEST}/${sample}_R1.fastq.gz"
+    R2_dest="${LOT1_DEST}/${sample}_R2.fastq.gz"
     
     if [[ -f "$R1_source" ]]; then
         ln -sf "$R1_source" "$R1_dest"
-        echo " ✓ ${sample}_R1 lié (Recette1 Aviti)"
+        echo " ✓ ${sample}_R1 lié (Lot1 Illumina)"
     else
-        echo " ✗ ATTENTION: ${sample}_R1 non trouvé dans ${source_dir}"
+        echo " ✗ ATTENTION: ${sample}_R1 non trouvé"
     fi
     
     if [[ -f "$R2_source" ]]; then
         ln -sf "$R2_source" "$R2_dest"
-        echo " ✓ ${sample}_R2 lié (Recette1 Aviti)"
+        echo " ✓ ${sample}_R2 lié (Lot1 Illumina)"
     else
-        echo " ✗ ATTENTION: ${sample}_R2 non trouvé dans ${source_dir}"
+        echo " ✗ ATTENTION: ${sample}_R2 non trouvé"
     fi
 done
 
 ################################################################################
-# Organisation des données Recette 2 (Aviti et Illumina)
+# ORGANISATION DES DONNÉES - LOT 2: Aviti no demux Recette1
 ################################################################################
 
 echo ""
-echo "=== Organisation des données Recette2 (Aviti + Illumina) ==="
+echo "=== LOT 2: Organisation Aviti no demux Recette1 ==="
 echo ""
 
-# Les fichiers sont déjà dans /home/plstenge/coprolites_comparison/01_raw_data
-# On crée des liens symboliques vers les sous-dossiers appropriés
+LOT2_SOURCE="/home/plstenge/coprolites/01_raw_data"
+LOT2_DEST="${BASE_DIR}/01_raw_data/Lot2_Aviti_no_demux_R1"
 
-for sample in "${SAMPLES[@]}"; do
-    # Aviti Recette2
-    aviti_r1_source="${RECIPE2_BASE}/Aviti_${sample}_R1.fastq.gz"
-    aviti_r2_source="${RECIPE2_BASE}/Aviti_${sample}_R2.fastq.gz"
+for sample in cop408 cop412 cop414; do
+    R1_source="${LOT2_SOURCE}/Aviti_${sample}_R1.fastq.gz"
+    R2_source="${LOT2_SOURCE}/Aviti_${sample}_R2.fastq.gz"
     
-    if [[ -f "$aviti_r1_source" ]]; then
-        ln -sf "$aviti_r1_source" "${BASE_DIR}/01_raw_data/recette2_aviti/${sample}_R1.fastq.gz"
-        echo " ✓ ${sample} Aviti_R1 lié (Recette2)"
+    R1_dest="${LOT2_DEST}/${sample}_R1.fastq.gz"
+    R2_dest="${LOT2_DEST}/${sample}_R2.fastq.gz"
+    
+    if [[ -f "$R1_source" ]]; then
+        ln -sf "$R1_source" "$R1_dest"
+        echo " ✓ ${sample}_R1 lié (Lot2 Aviti no demux)"
+    else
+        echo " ✗ ATTENTION: ${sample}_R1 non trouvé"
     fi
     
-    if [[ -f "$aviti_r2_source" ]]; then
-        ln -sf "$aviti_r2_source" "${BASE_DIR}/01_raw_data/recette2_aviti/${sample}_R2.fastq.gz"
-        echo " ✓ ${sample} Aviti_R2 lié (Recette2)"
-    fi
-    
-    # Illumina Recette2
-    illumina_r1_source="${RECIPE2_BASE}/Illumina_${sample}_R1.fastq.gz"
-    illumina_r2_source="${RECIPE2_BASE}/Illumina_${sample}_R2.fastq.gz"
-    
-    if [[ -f "$illumina_r1_source" ]]; then
-        ln -sf "$illumina_r1_source" "${BASE_DIR}/01_raw_data/recette2_illumina/${sample}_R1.fastq.gz"
-        echo " ✓ ${sample} Illumina_R1 lié (Recette2)"
-    fi
-    
-    if [[ -f "$illumina_r2_source" ]]; then
-        ln -sf "$illumina_r2_source" "${BASE_DIR}/01_raw_data/recette2_illumina/${sample}_R2.fastq.gz"
-        echo " ✓ ${sample} Illumina_R2 lié (Recette2)"
+    if [[ -f "$R2_source" ]]; then
+        ln -sf "$R2_source" "$R2_dest"
+        echo " ✓ ${sample}_R2 lié (Lot2 Aviti no demux)"
+    else
+        echo " ✗ ATTENTION: ${sample}_R2 non trouvé"
     fi
 done
 
 ################################################################################
-# Création des fichiers combinés Aviti+Illumina pour Recette2
+# ORGANISATION DES DONNÉES - LOT 3: Aviti demux Recette1 (2 RUNS À CONCATÉNER)
 ################################################################################
 
 echo ""
-echo "=== Fusion Aviti + Illumina (Recette2) ==="
+echo "=== LOT 3: Organisation Aviti demux Recette1 (concaténation 2 runs) ==="
 echo ""
 
-for sample in "${SAMPLES[@]}"; do
-    aviti_r1="${BASE_DIR}/01_raw_data/recette2_aviti/${sample}_R1.fastq.gz"
-    aviti_r2="${BASE_DIR}/01_raw_data/recette2_aviti/${sample}_R2.fastq.gz"
-    illumina_r1="${BASE_DIR}/01_raw_data/recette2_illumina/${sample}_R1.fastq.gz"
-    illumina_r2="${BASE_DIR}/01_raw_data/recette2_illumina/${sample}_R2.fastq.gz"
+LOT3_DEST="${BASE_DIR}/01_raw_data/Lot3_Aviti_demux_R1"
+
+# Chemins des 2 runs
+RUN1_BASE="/storage/groups/gdec/shared_paleo/E1531_final/run1_20250320_AV241601_E1531_Ps5Lane1_Ps6Lane2"
+RUN2_BASE="/storage/groups/gdec/shared_paleo/E1531_final/run2_20250414_AV241601_E1531_Ps5_Ps6_14042025"
+
+# Mapping échantillons -> dossiers
+declare -A LOT3_FOLDERS
+LOT3_FOLDERS["cop408"]="474_cop408"
+LOT3_FOLDERS["cop412"]="476_cop412"
+LOT3_FOLDERS["cop414"]="477_cop414"
+
+for sample in cop408 cop412 cop414; do
+    folder="${LOT3_FOLDERS[$sample]}"
     
-    combined_r1="${BASE_DIR}/01_raw_data/recette2_aviti_illumina_combined/${sample}_R1.fastq.gz"
-    combined_r2="${BASE_DIR}/01_raw_data/recette2_aviti_illumina_combined/${sample}_R2.fastq.gz"
+    # Fichiers run1
+    run1_r1="${RUN1_BASE}/${folder}/${folder}_R1.fastq.gz"
+    run1_r2="${RUN1_BASE}/${folder}/${folder}_R2.fastq.gz"
     
-    # Fusion R1
-    if [[ -f "$aviti_r1" ]] && [[ -f "$illumina_r1" ]]; then
-        cat "$aviti_r1" "$illumina_r1" > "$combined_r1"
-        echo " ✓ ${sample}_R1 fusionné (Aviti + Illumina)"
-    elif [[ -f "$aviti_r1" ]]; then
-        ln -sf "$aviti_r1" "$combined_r1"
-        echo " → ${sample}_R1 Aviti seul (pas d'Illumina)"
-    elif [[ -f "$illumina_r1" ]]; then
-        ln -sf "$illumina_r1" "$combined_r1"
-        echo " → ${sample}_R1 Illumina seul (pas d'Aviti)"
+    # Fichiers run2
+    run2_r1="${RUN2_BASE}/${folder}/${folder}_R1.fastq.gz"
+    run2_r2="${RUN2_BASE}/${folder}/${folder}_R2.fastq.gz"
+    
+    # Destination finale
+    dest_r1="${LOT3_DEST}/${sample}_R1.fastq.gz"
+    dest_r2="${LOT3_DEST}/${sample}_R2.fastq.gz"
+    
+    echo " → Concaténation ${sample}..."
+    
+    # Concaténation R1
+    if [[ -f "$run1_r1" ]] && [[ -f "$run2_r1" ]]; then
+        cat "$run1_r1" "$run2_r1" > "$dest_r1"
+        echo "   ✓ ${sample}_R1 concaténé (run1 + run2)"
+    elif [[ -f "$run1_r1" ]]; then
+        ln -sf "$run1_r1" "$dest_r1"
+        echo "   → ${sample}_R1 run1 seul (run2 absent)"
+    elif [[ -f "$run2_r1" ]]; then
+        ln -sf "$run2_r1" "$dest_r1"
+        echo "   → ${sample}_R1 run2 seul (run1 absent)"
+    else
+        echo "   ✗ ERREUR: Aucun fichier R1 trouvé pour ${sample}"
     fi
     
-    # Fusion R2
-    if [[ -f "$aviti_r2" ]] && [[ -f "$illumina_r2" ]]; then
-        cat "$aviti_r2" "$illumina_r2" > "$combined_r2"
-        echo " ✓ ${sample}_R2 fusionné (Aviti + Illumina)"
-    elif [[ -f "$aviti_r2" ]]; then
-        ln -sf "$aviti_r2" "$combined_r2"
-        echo " → ${sample}_R2 Aviti seul (pas d'Illumina)"
-    elif [[ -f "$illumina_r2" ]]; then
-        ln -sf "$illumina_r2" "$combined_r2"
-        echo " → ${sample}_R2 Illumina seul (pas d'Aviti)"
+    # Concaténation R2
+    if [[ -f "$run1_r2" ]] && [[ -f "$run2_r2" ]]; then
+        cat "$run1_r2" "$run2_r2" > "$dest_r2"
+        echo "   ✓ ${sample}_R2 concaténé (run1 + run2)"
+    elif [[ -f "$run1_r2" ]]; then
+        ln -sf "$run1_r2" "$dest_r2"
+        echo "   → ${sample}_R2 run1 seul (run2 absent)"
+    elif [[ -f "$run2_r2" ]]; then
+        ln -sf "$run2_r2" "$dest_r2"
+        echo "   → ${sample}_R2 run2 seul (run1 absent)"
+    else
+        echo "   ✗ ERREUR: Aucun fichier R2 trouvé pour ${sample}"
     fi
 done
 
-echo "Organisation des données terminée."
-
 ################################################################################
-# ÉTAPE 1: Contrôle qualité avec FastQC et MultiQC
+# ORGANISATION DES DONNÉES - LOT 4: Aviti Recette2
 ################################################################################
 
 echo ""
-echo "=== ÉTAPE 1: Contrôle qualité (FastQC/MultiQC) ==="
+echo "=== LOT 4: Organisation Aviti Recette2 ==="
 echo ""
 
-# Définition des stratégies à analyser
-declare -a STRATEGIES=("recette1_aviti" "recette2_aviti" "recette2_illumina" "recette2_aviti_illumina_combined")
+LOT4_SOURCE="/storage/groups/gdec/shared_paleo/E1531_final/run3_20251008_AV241601_E1531_Ps7_Ps8"
+LOT4_DEST="${BASE_DIR}/01_raw_data/Lot4_Aviti_R2"
 
-for strategy in "${STRATEGIES[@]}"; do
-    echo "FastQC pour ${strategy}..."
+declare -A LOT4_FOLDERS
+LOT4_FOLDERS["cop408"]="474_cop408"
+LOT4_FOLDERS["cop410"]="475_cop410"
+LOT4_FOLDERS["cop412"]="476_cop412"
+LOT4_FOLDERS["cop414"]="477_cop414"
+LOT4_FOLDERS["cop417"]="478_cop417"
+
+for sample in cop408 cop410 cop412 cop414 cop417; do
+    folder="${LOT4_FOLDERS[$sample]}"
     
-    INPUT_DIR="${BASE_DIR}/01_raw_data/${strategy}"
-    OUTPUT_DIR="${BASE_DIR}/02_quality_check/${strategy}"
-    mkdir -p "$OUTPUT_DIR"
+    R1_source="${LOT4_SOURCE}/${folder}/${folder}_R1.fastq.gz"
+    R2_source="${LOT4_SOURCE}/${folder}/${folder}_R2.fastq.gz"
+    
+    R1_dest="${LOT4_DEST}/${sample}_R1.fastq.gz"
+    R2_dest="${LOT4_DEST}/${sample}_R2.fastq.gz"
+    
+    if [[ -f "$R1_source" ]]; then
+        ln -sf "$R1_source" "$R1_dest"
+        echo " ✓ ${sample}_R1 lié (Lot4 Aviti R2)"
+    else
+        echo " ✗ ATTENTION: ${sample}_R1 non trouvé dans ${folder}"
+    fi
+    
+    if [[ -f "$R2_source" ]]; then
+        ln -sf "$R2_source" "$R2_dest"
+        echo " ✓ ${sample}_R2 lié (Lot4 Aviti R2)"
+    else
+        echo " ✗ ATTENTION: ${sample}_R2 non trouvé dans ${folder}"
+    fi
+done
+
+echo "Organisation des données terminée pour les 4 lots."
+
+################################################################################
+# ÉTAPE 1: Contrôle qualité RAW avec FastQC et MultiQC
+################################################################################
+
+echo ""
+echo "=== ÉTAPE 1: Contrôle qualité RAW (FastQC/MultiQC) ==="
+echo ""
+
+for lot in "${LOTS[@]}"; do
+    echo "FastQC RAW pour ${lot}..."
+    
+    INPUT_DIR="${BASE_DIR}/01_raw_data/${lot}"
+    OUTPUT_DIR="${BASE_DIR}/02_quality_check_raw/${lot}"
     
     for FILE in "${INPUT_DIR}"/*.fastq.gz; do
         if [[ -f "$FILE" ]]; then
@@ -262,12 +345,12 @@ for strategy in "${STRATEGIES[@]}"; do
     done
     
     # MultiQC
-    echo "MultiQC pour ${strategy}..."
+    echo "MultiQC RAW pour ${lot}..."
     cd "$OUTPUT_DIR"
-    multiqc . -n "multiqc_${strategy}.html" --force
+    multiqc . -n "multiqc_raw_${lot}.html" --force
 done
 
-echo "Contrôle qualité terminé."
+echo "Contrôle qualité RAW terminé."
 
 ################################################################################
 # ÉTAPE 2: Filtrage et trimming avec BBDuk
@@ -277,12 +360,11 @@ echo ""
 echo "=== ÉTAPE 2: Filtrage et trimming (BBDuk) ==="
 echo ""
 
-for strategy in "${STRATEGIES[@]}"; do
-    echo "BBDuk pour ${strategy}..."
+for lot in "${LOTS[@]}"; do
+    echo "BBDuk pour ${lot}..."
     
-    INPUT_DIR="${BASE_DIR}/01_raw_data/${strategy}"
-    OUTPUT_DIR="${BASE_DIR}/03_bbduk/${strategy}"
-    mkdir -p "$OUTPUT_DIR"
+    INPUT_DIR="${BASE_DIR}/01_raw_data/${lot}"
+    OUTPUT_DIR="${BASE_DIR}/03_bbduk/${lot}"
     
     cd "$INPUT_DIR"
     
@@ -295,7 +377,7 @@ for strategy in "${STRATEGIES[@]}"; do
         fi
         
         base_name="${r1_file%%_R1.fastq.gz}"
-        echo " → Traitement de ${base_name}..."
+        echo " → Traitement de ${base_name} (${lot})..."
         
         $BBDUK -Xmx4g \
             in1="$r1_file" \
@@ -326,15 +408,14 @@ echo ""
 echo "=== ÉTAPE 3: Déduplication (FastUniq) ==="
 echo ""
 
-TMP="/tmp/fastuniq_coprolites_tmp_$$"
+TMP="/tmp/fastuniq_coprolites_4lots_$$"
 mkdir -p "$TMP"
 
-for strategy in "${STRATEGIES[@]}"; do
-    echo "FastUniq pour ${strategy}..."
+for lot in "${LOTS[@]}"; do
+    echo "FastUniq pour ${lot}..."
     
-    INPUT_DIR="${BASE_DIR}/03_bbduk/${strategy}"
-    OUTPUT_DIR="${BASE_DIR}/04_fastuniq/${strategy}"
-    mkdir -p "$OUTPUT_DIR"
+    INPUT_DIR="${BASE_DIR}/03_bbduk/${lot}"
+    OUTPUT_DIR="${BASE_DIR}/04_fastuniq/${lot}"
     
     cd "$INPUT_DIR" || continue
     
@@ -343,17 +424,17 @@ for strategy in "${STRATEGIES[@]}"; do
         R2_gz="${base}_R2.fastq.gz"
         
         if [[ -f "$R2_gz" ]]; then
-            echo " → Traitement de ${base}..."
+            echo " → Traitement de ${base} (${lot})..."
             
-            R1_tmp="${TMP}/${base}_R1.fastq"
-            R2_tmp="${TMP}/${base}_R2.fastq"
-            listfile="${TMP}/${base}.list"
+            R1_tmp="${TMP}/${lot}_${base}_R1.fastq"
+            R2_tmp="${TMP}/${lot}_${base}_R2.fastq"
+            listfile="${TMP}/${lot}_${base}.list"
             
             # Décompression
             zcat "$INPUT_DIR/$R1_gz" > "$R1_tmp"
             zcat "$INPUT_DIR/$R2_gz" > "$R2_tmp"
             
-            # Création du fichier liste pour FastUniq
+            # Création du fichier liste
             echo -e "${R1_tmp}\n${R2_tmp}" > "$listfile"
             
             # FastUniq
@@ -374,26 +455,25 @@ rm -rf "$TMP"
 echo "Déduplication FastUniq terminée."
 
 ################################################################################
-# ÉTAPE 4: Clumpify - Déduplication optique supplémentaire
+# ÉTAPE 4: Clumpify - Déduplication optique
 ################################################################################
 
 echo ""
 echo "=== ÉTAPE 4: Clumpify (déduplication optique) ==="
 echo ""
 
-for strategy in "${STRATEGIES[@]}"; do
-    echo "Clumpify pour ${strategy}..."
+for lot in "${LOTS[@]}"; do
+    echo "Clumpify pour ${lot}..."
     
-    INPUT_DIR="${BASE_DIR}/04_fastuniq/${strategy}"
-    OUTPUT_DIR="${BASE_DIR}/05_clumpify/${strategy}"
-    mkdir -p "$OUTPUT_DIR"
+    INPUT_DIR="${BASE_DIR}/04_fastuniq/${lot}"
+    OUTPUT_DIR="${BASE_DIR}/05_clumpify/${lot}"
     
     for R1 in "${INPUT_DIR}"/*_R1.fastq; do
         R2="${R1/_R1.fastq/_R2.fastq}"
         
         if [[ -f "$R2" ]]; then
             base=$(basename "$R1" _R1.fastq)
-            echo " → Traitement de ${base}..."
+            echo " → Traitement de ${base} (${lot})..."
             
             $CLUMPIFY \
                 in="$R1" in2="$R2" \
@@ -401,7 +481,7 @@ for strategy in "${STRATEGIES[@]}"; do
                 out2="${OUTPUT_DIR}/${base}_clumpify_R2.fastq.gz" \
                 dedupe=t
         else
-            echo " ✗ Fichier R2 manquant pour $R1, ignoré."
+            echo " ✗ Fichier R2 manquant pour $R1"
         fi
     done
 done
@@ -416,19 +496,18 @@ echo ""
 echo "=== ÉTAPE 5: Fastp (merging et QC final) ==="
 echo ""
 
-for strategy in "${STRATEGIES[@]}"; do
-    echo "Fastp pour ${strategy}..."
+for lot in "${LOTS[@]}"; do
+    echo "Fastp pour ${lot}..."
     
-    INPUT_DIR="${BASE_DIR}/05_clumpify/${strategy}"
-    OUTPUT_DIR="${BASE_DIR}/06_fastp/${strategy}"
-    mkdir -p "$OUTPUT_DIR"
+    INPUT_DIR="${BASE_DIR}/05_clumpify/${lot}"
+    OUTPUT_DIR="${BASE_DIR}/06_fastp/${lot}"
     
     for R1 in "${INPUT_DIR}"/*_R1.fastq.gz; do
         R2="${R1/_R1.fastq.gz/_R2.fastq.gz}"
         
         if [[ -f "$R2" ]]; then
             base=$(basename "$R1" _R1.fastq.gz)
-            echo " → Traitement de ${base}..."
+            echo " → Traitement de ${base} (${lot})..."
             
             fastp \
                 -i "$R1" \
@@ -442,7 +521,7 @@ for strategy in "${STRATEGIES[@]}"; do
                 --length_required 30 \
                 --qualified_quality_phred 20
         else
-            echo " ✗ Fichier R2 manquant pour $R1, ignoré."
+            echo " ✗ Fichier R2 manquant pour $R1"
         fi
     done
 done
@@ -450,21 +529,49 @@ done
 echo "Fastp terminé."
 
 ################################################################################
-# ÉTAPE 6: Classification taxonomique avec Kraken2
+# ÉTAPE 6: Contrôle qualité CLEAN avec FastQC et MultiQC
 ################################################################################
 
 echo ""
-echo "=== ÉTAPE 6: Classification taxonomique (Kraken2) ==="
+echo "=== ÉTAPE 6: Contrôle qualité CLEAN (FastQC/MultiQC) ==="
 echo ""
 
-for strategy in "${STRATEGIES[@]}"; do
-    echo "Kraken2 pour ${strategy}..."
+for lot in "${LOTS[@]}"; do
+    echo "FastQC CLEAN pour ${lot}..."
     
-    FASTP_DIR="${BASE_DIR}/06_fastp/${strategy}"
-    OUT_DIR="${BASE_DIR}/07_kraken2/${strategy}"
-    mkdir -p "$OUT_DIR"
+    INPUT_DIR="${BASE_DIR}/06_fastp/${lot}"
+    OUTPUT_DIR="${BASE_DIR}/07_quality_check_clean/${lot}"
     
-    # Analyse des reads merged (single-end)
+    # FastQC sur tous les fichiers fastp (merged, R1, R2)
+    for FILE in "${INPUT_DIR}"/*.fastq.gz; do
+        if [[ -f "$FILE" ]]; then
+            fastqc "$FILE" -o "$OUTPUT_DIR" -t 4
+        fi
+    done
+    
+    # MultiQC
+    echo "MultiQC CLEAN pour ${lot}..."
+    cd "$OUTPUT_DIR"
+    multiqc . -n "multiqc_clean_${lot}.html" --force
+done
+
+echo "Contrôle qualité CLEAN terminé."
+
+################################################################################
+# ÉTAPE 7: Classification taxonomique avec Kraken2
+################################################################################
+
+echo ""
+echo "=== ÉTAPE 7: Classification taxonomique (Kraken2) ==="
+echo ""
+
+for lot in "${LOTS[@]}"; do
+    echo "Kraken2 pour ${lot}..."
+    
+    FASTP_DIR="${BASE_DIR}/06_fastp/${lot}"
+    OUT_DIR="${BASE_DIR}/08_kraken2/${lot}"
+    
+    # Analyse des reads merged
     echo " → Analyse des reads merged..."
     for MERGED in "${FASTP_DIR}"/*_fastp_merged.fastq.gz; do
         if [[ -f "$MERGED" ]]; then
@@ -472,14 +579,14 @@ for strategy in "${STRATEGIES[@]}"; do
             OUT_KRAKEN="${OUT_DIR}/${SAMPLE}_merged.kraken"
             OUT_REPORT="${OUT_DIR}/${SAMPLE}_merged.report"
             
-            echo "   • ${SAMPLE} (merged)"
+            echo "   • ${SAMPLE} (merged) - ${lot}"
             
             kraken2 --confidence 0.2 --db "$KRAKEN2_DB" --threads $THREADS \
                 --output "$OUT_KRAKEN" --report "$OUT_REPORT" "$MERGED"
         fi
     done
     
-    # Analyse des reads unmerged (paired-end)
+    # Analyse des reads unmerged
     echo " → Analyse des reads unmerged..."
     for R1 in "${FASTP_DIR}"/*_fastp_R1.fastq.gz; do
         if [[ -f "$R1" ]]; then
@@ -490,7 +597,7 @@ for strategy in "${STRATEGIES[@]}"; do
                 OUT_KRAKEN="${OUT_DIR}/${SAMPLE}_unmerged.kraken"
                 OUT_REPORT="${OUT_DIR}/${SAMPLE}_unmerged.report"
                 
-                echo "   • ${SAMPLE} (unmerged)"
+                echo "   • ${SAMPLE} (unmerged) - ${lot}"
                 
                 kraken2 --confidence 0.2 --paired --db "$KRAKEN2_DB" --threads $THREADS \
                     --output "$OUT_KRAKEN" --report "$OUT_REPORT" "$R1" "$R2"
@@ -502,19 +609,18 @@ done
 echo "Classification Kraken2 terminée."
 
 ################################################################################
-# ÉTAPE 7: Visualisation avec Krona
+# ÉTAPE 8: Visualisation avec Krona
 ################################################################################
 
 echo ""
-echo "=== ÉTAPE 7: Visualisation (Krona) ==="
+echo "=== ÉTAPE 8: Visualisation (Krona) ==="
 echo ""
 
-for strategy in "${STRATEGIES[@]}"; do
-    echo "Krona pour ${strategy}..."
+for lot in "${LOTS[@]}"; do
+    echo "Krona pour ${lot}..."
     
-    IN_DIR="${BASE_DIR}/07_kraken2/${strategy}"
-    OUT_DIR="${BASE_DIR}/08_krona/${strategy}"
-    mkdir -p "$OUT_DIR"
+    IN_DIR="${BASE_DIR}/08_kraken2/${lot}"
+    OUT_DIR="${BASE_DIR}/09_krona/${lot}"
     
     cd "$IN_DIR"
     
@@ -523,7 +629,7 @@ for strategy in "${STRATEGIES[@]}"; do
         ktImportTaxonomy -t 5 -m 3 -o "${OUT_DIR}/all_samples_krona.html" "${IN_DIR}"/*.report
     fi
     
-    # Krona individuel pour chaque échantillon
+    # Krona individuel
     for report in "${IN_DIR}"/*.report; do
         if [[ -f "$report" ]]; then
             base=$(basename "$report" .report)
@@ -535,31 +641,29 @@ done
 echo "Visualisation Krona terminée."
 
 ################################################################################
-# ÉTAPE 8: Création des tables d'assignation taxonomique (format MPA)
+# ÉTAPE 9: Création des tables MPA
 ################################################################################
 
 echo ""
-echo "=== ÉTAPE 8: Création des tables MPA ==="
+echo "=== ÉTAPE 9: Création des tables MPA ==="
 echo ""
 
-# Installation ou vérification de KrakenTools si nécessaire
+# Installation KrakenTools si nécessaire
 if [[ ! -d "$KRAKENTOOLS_DIR" ]]; then
     echo "Installation de KrakenTools..."
-    mkdir -p "${BASE_DIR}/07_kraken2"
-    cd "${BASE_DIR}/07_kraken2"
+    mkdir -p "${BASE_DIR}/08_kraken2"
+    cd "${BASE_DIR}/08_kraken2"
     git clone https://github.com/jenniferlu717/KrakenTools.git
 fi
 
-for strategy in "${STRATEGIES[@]}"; do
-    echo "Conversion MPA pour ${strategy}..."
+for lot in "${LOTS[@]}"; do
+    echo "Conversion MPA pour ${lot}..."
     
-    IN_DIR="${BASE_DIR}/07_kraken2/${strategy}"
-    OUT_DIR="${BASE_DIR}/09_mpa_tables/${strategy}"
-    mkdir -p "$OUT_DIR"
+    IN_DIR="${BASE_DIR}/08_kraken2/${lot}"
+    OUT_DIR="${BASE_DIR}/10_mpa_tables/${lot}"
     
     cd "$IN_DIR"
     
-    # Conversion kreport vers format MPA
     declare -a mpa_files=()
     
     for report in *.report; do
@@ -574,7 +678,7 @@ for strategy in "${STRATEGIES[@]}"; do
         fi
     done
     
-    # Combinaison de tous les fichiers MPA en une seule table
+    # Combinaison
     if [[ ${#mpa_files[@]} -gt 0 ]]; then
         echo " → Combinaison de tous les fichiers MPA..."
         python3 "${KRAKENTOOLS_DIR}/combine_mpa.py" -i "${mpa_files[@]}" -o "${OUT_DIR}/combined_all.tsv"
@@ -584,169 +688,326 @@ done
 echo "Création des tables MPA terminée."
 
 ################################################################################
-# ÉTAPE 9: Génération du rapport de comparaison
+# ÉTAPE 10: Génération du tableau récapitulatif des séquences
 ################################################################################
 
 echo ""
-echo "=== ÉTAPE 9: Génération du rapport de comparaison ==="
+echo "=== ÉTAPE 10: Tableau récapitulatif (avant/après nettoyage) ==="
 echo ""
 
-REPORT_FILE="${BASE_DIR}/00_scripts/pipeline_comparison_report.txt"
+SUMMARY_TABLE="${BASE_DIR}/11_summary_tables/sequences_summary.tsv"
+
+# En-tête du tableau
+cat > "$SUMMARY_TABLE" << 'HEADER'
+Lot	Sample	Stage	Nb_sequences	Longueur_moyenne	GC_percent
+HEADER
+
+# Fonction pour extraire les stats d'un fichier fastq.gz
+function extract_stats() {
+    local file=$1
+    local lot=$2
+    local sample=$3
+    local stage=$4
+    
+    if [[ ! -f "$file" ]]; then
+        echo "FICHIER_ABSENT" >&2
+        return 1
+    fi
+    
+    # Compter le nombre de séquences
+    nb_seq=$(zcat "$file" 2>/dev/null | echo $((`wc -l`/4)))
+    
+    # Calculer longueur moyenne et GC%
+    stats=$(zcat "$file" 2>/dev/null | awk 'NR%4==2 {
+        total_len += length($0)
+        gc_count += gsub(/[GCgc]/, "", $0)
+        at_count += gsub(/[ATat]/, "", $0)
+        count++
+    } END {
+        if (count > 0) {
+            avg_len = total_len / count
+            gc_perc = (gc_count / (gc_count + at_count)) * 100
+            printf "%.1f\t%.2f", avg_len, gc_perc
+        } else {
+            printf "0\t0"
+        }
+    }')
+    
+    echo -e "${lot}\t${sample}\t${stage}\t${nb_seq}\t${stats}" >> "$SUMMARY_TABLE"
+}
+
+echo "Calcul des statistiques pour chaque échantillon..."
+
+for lot in "${LOTS[@]}"; do
+    echo " → Traitement du ${lot}..."
+    
+    samples="${LOT_SAMPLES[$lot]}"
+    
+    for sample in $samples; do
+        echo "   • ${sample}..."
+        
+        # RAW
+        raw_r1="${BASE_DIR}/01_raw_data/${lot}/${sample}_R1.fastq.gz"
+        extract_stats "$raw_r1" "$lot" "$sample" "RAW"
+        
+        # CLEAN (après Fastp - merged)
+        clean_merged="${BASE_DIR}/06_fastp/${lot}/clean_${sample}_dedup_clumpify_fastp_merged.fastq.gz"
+        if [[ -f "$clean_merged" ]]; then
+            extract_stats "$clean_merged" "$lot" "$sample" "CLEAN_merged"
+        fi
+        
+        # CLEAN (après Fastp - R1 unmerged)
+        clean_r1="${BASE_DIR}/06_fastp/${lot}/clean_${sample}_dedup_clumpify_fastp_R1.fastq.gz"
+        if [[ -f "$clean_r1" ]]; then
+            extract_stats "$clean_r1" "$lot" "$sample" "CLEAN_unmerged"
+        fi
+    done
+done
+
+echo ""
+echo "Tableau récapitulatif créé: ${SUMMARY_TABLE}"
+echo ""
+echo "Aperçu:"
+head -20 "$SUMMARY_TABLE" | column -t
+
+################################################################################
+# ÉTAPE 11: Génération du rapport global de comparaison
+################################################################################
+
+echo ""
+echo "=== ÉTAPE 11: Génération du rapport global ==="
+echo ""
+
+REPORT_FILE="${BASE_DIR}/00_scripts/pipeline_4lots_report.txt"
 
 cat > "$REPORT_FILE" << 'EOF'
 ================================================================================
-RAPPORT D'ANALYSE - PROJET COPROLITES
+RAPPORT D'ANALYSE - PROJET COPROLITES - 4 LOTS
 ================================================================================
 Date d'analyse: $(date)
-Pipeline version: 2.0 (environnement conda unique)
+Pipeline version: 3.0 (4 lots - environnement conda unique)
 
 ================================================================================
 DESCRIPTION DU PROJET
 ================================================================================
 
-Analyse comparative de deux recettes de séquençage pour échantillons de coprolites:
+Analyse comparative de 4 lots de séquençage de coprolites:
 
-Échantillons:
-- cop408
-- cop410
-- cop412
-- cop414
-- cop417
+LOT 1: Recette1 - Illumina
+  • Technologie: Illumina
+  • Protocole: recipes-ShortInsert (2x150bp)
+  • Échantillons: cop408, cop410, cop412, cop414, cop417 (5 échantillons)
+  • Source: /home/plstenge/coprolites/01_raw_data
 
-Stratégies de séquençage comparées:
+LOT 2: Recette1 - Aviti sans démultiplexage
+  • Technologie: Aviti (no demultiplexing)
+  • Protocole: recipes-ShortInsert (2x150bp)
+  • Échantillons: cop408, cop412, cop414 (3 échantillons)
+  • Source: /home/plstenge/coprolites/01_raw_data
 
-1. Recette1 - Aviti uniquement (recette1_aviti)
-   → recipes-ShortInsert (2x150bp)
-   → Technologie: Aviti
+LOT 3: Recette1 - Aviti avec démultiplexage (2 runs concaténés)
+  • Technologie: Aviti (demultiplexing)
+  • Protocole: recipes-ShortInsert (2x150bp)
+  • Échantillons: cop408, cop412, cop414 (3 échantillons)
+  • Sources:
+    - Run1: /storage/groups/gdec/shared_paleo/E1531_final/run1_20250320_AV241601_E1531_Ps5Lane1_Ps6Lane2
+    - Run2: /storage/groups/gdec/shared_paleo/E1531_final/run2_20250414_AV241601_E1531_Ps5_Ps6_14042025
+  • IMPORTANT: Les séquences des 2 runs ont été concaténées
 
-2. Recette2 - Aviti (recette2_aviti)
-   → recipes-v3.3.x-ShortInsert-SmallFragmentRecovery (2x150bp)
-   → Technologie: Aviti
-   → Optimisé pour récupération de fragments courts (aDNA)
-
-3. Recette2 - Illumina (recette2_illumina)
-   → recipes-v3.3.x-ShortInsert-SmallFragmentRecovery (2x150bp)
-   → Technologie: Illumina
-   → Optimisé pour récupération de fragments courts (aDNA)
-
-4. Recette2 - Aviti + Illumina combinés (recette2_aviti_illumina_combined)
-   → Fusion des datasets Aviti et Illumina de la Recette2
-   → Maximise la profondeur de séquençage
+LOT 4: Recette2 - Aviti avec récupération de fragments courts
+  • Technologie: Aviti
+  • Protocole: recipes-v3.3.x-ShortInsert-SmallFragmentRecovery (2x150bp)
+  • Échantillons: cop408, cop410, cop412, cop414, cop417 (5 échantillons)
+  • Source: /storage/groups/gdec/shared_paleo/E1531_final/run3_20251008_AV241601_E1531_Ps7_Ps8
+  • IMPORTANT: Optimisé pour l'ADN ancien (fragments courts)
 
 ================================================================================
 ÉTAPES DU PIPELINE
 ================================================================================
 
-1. Contrôle qualité (FastQC/MultiQC)
-2. Filtrage et trimming (BBDuk) - Élimination des adaptateurs et phiX
-3. Déduplication (FastUniq) - Suppression des duplicats PCR
-4. Clumpify - Déduplication optique supplémentaire
-5. Fastp - Merging des reads et contrôle qualité final
-6. Classification taxonomique (Kraken2) - Base de données nt
-7. Visualisation (Krona) - Charts interactifs de composition taxonomique
-8. Tables d'assignation (MPA format) - Pour analyses downstream
+1. Contrôle qualité RAW (FastQC/MultiQC)
+   → Analyse de la qualité des données brutes
 
-IMPORTANT: Tous les outils sont exécutés depuis un environnement conda unique
-           (coprolites-pipeline) pour éviter les erreurs de transition.
+2. Filtrage et trimming (BBDuk)
+   → Élimination des adaptateurs et phiX
+   → Trimming qualité (Q≥20)
+   → Longueur minimale: 25 bp
+
+3. Déduplication (FastUniq)
+   → Suppression des duplicats PCR
+
+4. Clumpify
+   → Déduplication optique supplémentaire
+
+5. Fastp
+   → Merging des reads paired-end
+   → Contrôle qualité final
+   → Longueur minimale: 30 bp
+
+6. Contrôle qualité CLEAN (FastQC/MultiQC)
+   → Analyse de la qualité après nettoyage complet
+
+7. Classification taxonomique (Kraken2)
+   → Base de données: nt (complete)
+   → Confidence: 0.2
+   → Analyse merged + unmerged
+
+8. Visualisation (Krona)
+   → Charts interactifs de composition taxonomique
+
+9. Tables d'assignation (MPA format)
+   → Pour analyses statistiques downstream
+
+10. Tableau récapitulatif
+    → Nombre de séquences, longueur moyenne, %GC
+    → Avant et après nettoyage
+
+IMPORTANT: Tous les outils exécutés depuis un environnement conda unique.
 
 ================================================================================
 LOCALISATION DES RÉSULTATS
 ================================================================================
 
-Répertoire principal: /home/plstenge/coprolites_comparison
+Répertoire principal: /home/plstenge/coprolites
 
-Structure des résultats:
+Structure (pour chaque lot):
 
-├── 01_raw_data/                        # Données brutes organisées
-│   ├── recette1_aviti/                 # Recette1 (Aviti)
-│   ├── recette2_aviti/                 # Recette2 (Aviti)
-│   ├── recette2_illumina/              # Recette2 (Illumina)
-│   └── recette2_aviti_illumina_combined/  # Recette2 (Aviti+Illumina)
+├── 01_raw_data/{Lot}/                  # Données brutes organisées
+├── 02_quality_check_raw/{Lot}/         # QC avant nettoyage
+├── 03_bbduk/{Lot}/                     # Reads filtrés
+├── 04_fastuniq/{Lot}/                  # Reads dédupliqués
+├── 05_clumpify/{Lot}/                  # Déduplication optique
+├── 06_fastp/{Lot}/                     # Reads merged/unmerged finaux
+├── 07_quality_check_clean/{Lot}/       # QC après nettoyage
+├── 08_kraken2/{Lot}/                   # Classification taxonomique
+├── 09_krona/{Lot}/                     # Visualisations interactives
+├── 10_mpa_tables/{Lot}/                # Tables d'assignation
+└── 11_summary_tables/                  # Tableaux récapitulatifs
 
-├── 02_quality_check/                   # Rapports FastQC/MultiQC
-├── 03_bbduk/                           # Reads filtrés
-├── 04_fastuniq/                        # Reads dédupliqués
-├── 05_clumpify/                        # Déduplication optique
-├── 06_fastp/                           # Reads merged et unmerged finaux
+Les 4 lots:
+- Lot1_Illumina_R1
+- Lot2_Aviti_no_demux_R1
+- Lot3_Aviti_demux_R1
+- Lot4_Aviti_R2
 
-├── 07_kraken2/                         # Classification taxonomique
-│   ├── recette1_aviti/
-│   ├── recette2_aviti/
-│   ├── recette2_illumina/
-│   └── recette2_aviti_illumina_combined/
+================================================================================
+TABLEAU RÉCAPITULATIF DES SÉQUENCES
+================================================================================
 
-├── 08_krona/                           # Visualisations interactives
-│   ├── recette1_aviti/
-│   ├── recette2_aviti/
-│   ├── recette2_illumina/
-│   └── recette2_aviti_illumina_combined/
+Disponible dans: 11_summary_tables/sequences_summary.tsv
 
-└── 09_mpa_tables/                      # Tables d'assignation
-    ├── recette1_aviti/
-    ├── recette2_aviti/
-    ├── recette2_illumina/
-    └── recette2_aviti_illumina_combined/
+Colonnes:
+- Lot: Identifiant du lot
+- Sample: Nom de l'échantillon
+- Stage: RAW / CLEAN_merged / CLEAN_unmerged
+- Nb_sequences: Nombre de séquences
+- Longueur_moyenne: Longueur moyenne des reads (bp)
+- GC_percent: Pourcentage GC
+
+Ce tableau permet de comparer:
+1. La perte de séquences à chaque étape de nettoyage
+2. Les différences de longueur entre lots et technologies
+3. Les variations de %GC (indicateur de contamination)
+4. L'efficacité du merging (aDNA = taux de merging élevé)
 
 ================================================================================
 ANALYSES DE COMPARAISON RECOMMANDÉES
 ================================================================================
 
-Pour comparer les performances des 4 stratégies:
+1. Comparaison des technologies (Illumina vs Aviti):
+   - LOT 1 (Illumina) vs LOT 2/3/4 (Aviti)
+   - Rendement, qualité, biais taxonomiques?
 
-1. Nombre de reads à chaque étape:
-   - Comparez le taux de rétention entre les stratégies
-   - Vérifiez le taux de merging (indicateur de qualité aDNA)
-   - Comparez Aviti vs Illumina dans Recette2
+2. Impact du démultiplexage (Aviti):
+   - LOT 2 (no demux) vs LOT 3 (demux)
+   - Différences de qualité et rendement?
 
-2. Composition taxonomique:
-   - Ouvrez les fichiers Krona pour visualisation interactive
-   - Comparez la diversité détectée entre recettes et technologies
-   - Identifiez les taxons spécifiques à chaque stratégie
+3. Comparaison des recettes (R1 vs R2):
+   - LOT 1/2/3 (Recette1) vs LOT 4 (Recette2)
+   - Efficacité de récupération des fragments courts?
 
-3. Analyse quantitative:
-   - Utilisez les fichiers combined_all.tsv dans 09_mpa_tables/
-   - Importez dans R pour analyses statistiques et visualisations
+4. Effet de la concaténation (LOT 3):
+   - Augmentation de profondeur attendue
+   - Cohérence entre les 2 runs?
 
-4. Évaluation comparative:
-   - Recette2 vs Recette1: Amélioration de la récupération de fragments courts?
-   - Aviti vs Illumina (Recette2): Différences technologiques?
-   - Combined vs séparé: Valeur ajoutée de la fusion?
+5. Composition taxonomique:
+   - Utiliser les fichiers Krona pour visualisation
+   - Comparer la diversité entre lots
+   - Identifier les biais technologiques
 
 ================================================================================
-COMMANDES POUR ANALYSES COMPLÉMENTAIRES EN R
+COMMANDES R POUR ANALYSES COMPLÉMENTAIRES
 ================================================================================
 
-# Chargement et comparaison des tables MPA
+# Chargement du tableau récapitulatif
 library(tidyverse)
 
-# Chargement des 4 stratégies
-mpa_r1_aviti <- read_tsv("/home/plstenge/coprolites_comparison/09_mpa_tables/recette1_aviti/combined_all.tsv")
-mpa_r2_aviti <- read_tsv("/home/plstenge/coprolites_comparison/09_mpa_tables/recette2_aviti/combined_all.tsv")
-mpa_r2_illumina <- read_tsv("/home/plstenge/coprolites_comparison/09_mpa_tables/recette2_illumina/combined_all.tsv")
-mpa_r2_combined <- read_tsv("/home/plstenge/coprolites_comparison/09_mpa_tables/recette2_aviti_illumina_combined/combined_all.tsv")
+summary <- read_tsv("/home/plstenge/coprolites/11_summary_tables/sequences_summary.tsv")
 
-# Comparaison de la richesse taxonomique
-richness_comparison <- tibble(
-  Strategy = c("Recette1_Aviti", "Recette2_Aviti", "Recette2_Illumina", "Recette2_Combined"),
-  N_taxa = c(nrow(mpa_r1_aviti), nrow(mpa_r2_aviti), nrow(mpa_r2_illumina), nrow(mpa_r2_combined))
+# Visualisation du nombre de séquences par lot
+summary %>%
+  filter(Stage == "RAW") %>%
+  ggplot(aes(x = Sample, y = Nb_sequences, fill = Lot)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_minimal() +
+  labs(title = "Nombre de séquences RAW par lot et échantillon",
+       y = "Nombre de séquences") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Taux de rétention après nettoyage
+retention <- summary %>%
+  pivot_wider(names_from = Stage, values_from = Nb_sequences) %>%
+  mutate(Retention_pct = (CLEAN_merged + CLEAN_unmerged) / RAW * 100)
+
+ggplot(retention, aes(x = Lot, y = Retention_pct, fill = Lot)) +
+  geom_boxplot() +
+  theme_minimal() +
+  labs(title = "Taux de rétention des séquences après nettoyage",
+       y = "Rétention (%)")
+
+# Comparaison des longueurs moyennes
+summary %>%
+  ggplot(aes(x = Lot, y = Longueur_moyenne, fill = Stage)) +
+  geom_boxplot() +
+  theme_minimal() +
+  labs(title = "Distribution des longueurs moyennes",
+       y = "Longueur moyenne (bp)")
+
+# Comparaison %GC
+summary %>%
+  ggplot(aes(x = Lot, y = GC_percent, fill = Stage)) +
+  geom_boxplot() +
+  theme_minimal() +
+  labs(title = "Distribution du %GC",
+       y = "%GC")
+
+# Chargement et comparaison des tables MPA
+mpa_lot1 <- read_tsv("/home/plstenge/coprolites/10_mpa_tables/Lot1_Illumina_R1/combined_all.tsv")
+mpa_lot2 <- read_tsv("/home/plstenge/coprolites/10_mpa_tables/Lot2_Aviti_no_demux_R1/combined_all.tsv")
+mpa_lot3 <- read_tsv("/home/plstenge/coprolites/10_mpa_tables/Lot3_Aviti_demux_R1/combined_all.tsv")
+mpa_lot4 <- read_tsv("/home/plstenge/coprolites/10_mpa_tables/Lot4_Aviti_R2/combined_all.tsv")
+
+# Richesse taxonomique par lot
+richness <- tibble(
+  Lot = c("Lot1_Illumina", "Lot2_Aviti_no_demux", "Lot3_Aviti_demux", "Lot4_Aviti_R2"),
+  N_taxa = c(nrow(mpa_lot1), nrow(mpa_lot2), nrow(mpa_lot3), nrow(mpa_lot4))
 )
 
-# Visualisation
-ggplot(richness_comparison, aes(x = Strategy, y = N_taxa, fill = Strategy)) +
+ggplot(richness, aes(x = Lot, y = N_taxa, fill = Lot)) +
   geom_bar(stat = "identity") +
   theme_minimal() +
-  labs(title = "Richesse taxonomique par stratégie",
+  labs(title = "Richesse taxonomique par lot",
        y = "Nombre de taxons détectés") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-# Analyse de Venn diagram (taxons partagés/uniques)
+# Diagramme de Venn (taxons partagés/uniques)
 library(ggvenn)
 
 taxa_lists <- list(
-  Recette1_Aviti = mpa_r1_aviti$taxonomy,
-  Recette2_Aviti = mpa_r2_aviti$taxonomy,
-  Recette2_Illumina = mpa_r2_illumina$taxonomy,
-  Recette2_Combined = mpa_r2_combined$taxonomy
+  Lot1_Illumina = mpa_lot1$taxonomy,
+  Lot2_Aviti_no_demux = mpa_lot2$taxonomy,
+  Lot3_Aviti_demux = mpa_lot3$taxonomy,
+  Lot4_Aviti_R2 = mpa_lot4$taxonomy
 )
 
 ggvenn(taxa_lists)
@@ -756,11 +1017,21 @@ INFORMATIONS TECHNIQUES
 ================================================================================
 
 Base de données Kraken2: /home/plstenge/k2_core_nt_20250609
-KrakenTools: /home/plstenge/coprolites_comparison/07_kraken2/KrakenTools
+KrakenTools: /home/plstenge/coprolites/08_kraken2/KrakenTools
 Environnement conda: coprolites-pipeline
 
 Threads utilisés: 36
 Mémoire allouée: 1000G
+
+Outils et versions:
+- FastQC
+- MultiQC
+- BBMap (BBDuk, Clumpify)
+- FastUniq
+- Fastp
+- Kraken2
+- Krona
+- KrakenTools
 
 ================================================================================
 CONTACT
@@ -771,7 +1042,7 @@ Pour toute question: pierrelouis.stenger@gmail.com
 ================================================================================
 EOF
 
-# Substitution de la date dans le rapport
+# Substitution de la date
 sed -i "s/\$(date)/$(date)/" "$REPORT_FILE"
 
 cat "$REPORT_FILE"
@@ -780,75 +1051,33 @@ echo ""
 echo "Rapport généré: $REPORT_FILE"
 
 ################################################################################
-# ÉTAPE 10: Statistiques finales
-################################################################################
-
-echo ""
-echo "=== ÉTAPE 10: Génération des statistiques ==="
-echo ""
-
-STATS_FILE="${BASE_DIR}/00_scripts/pipeline_statistics.txt"
-
-cat > "$STATS_FILE" << EOF
-================================================================================
-STATISTIQUES D'ANALYSE - PROJET COPROLITES
-================================================================================
-Date: $(date)
-
-EOF
-
-for strategy in "${STRATEGIES[@]}"; do
-    echo "Statistiques pour ${strategy}..." | tee -a "$STATS_FILE"
-    echo "----------------------------------------" | tee -a "$STATS_FILE"
-    
-    # Compter les fichiers à différentes étapes
-    RAW_COUNT=$(ls "${BASE_DIR}/01_raw_data/${strategy}"/*.fastq.gz 2>/dev/null | wc -l)
-    BBDUK_COUNT=$(ls "${BASE_DIR}/03_bbduk/${strategy}"/clean_*.fastq.gz 2>/dev/null | wc -l)
-    FASTP_MERGED_COUNT=$(ls "${BASE_DIR}/06_fastp/${strategy}"/*_merged.fastq.gz 2>/dev/null | wc -l)
-    KRAKEN_COUNT=$(ls "${BASE_DIR}/07_kraken2/${strategy}"/*.report 2>/dev/null | wc -l)
-    
-    echo "  Fichiers bruts: ${RAW_COUNT}" | tee -a "$STATS_FILE"
-    echo "  Fichiers après BBDuk: ${BBDUK_COUNT}" | tee -a "$STATS_FILE"
-    echo "  Fichiers merged (Fastp): ${FASTP_MERGED_COUNT}" | tee -a "$STATS_FILE"
-    echo "  Rapports Kraken2: ${KRAKEN_COUNT}" | tee -a "$STATS_FILE"
-    echo "" | tee -a "$STATS_FILE"
-done
-
-cat "$STATS_FILE"
-
-################################################################################
 # FIN DU PIPELINE
 ################################################################################
 
 echo ""
 echo "=========================================="
-echo "PIPELINE TERMINÉ AVEC SUCCÈS"
+echo "PIPELINE TERMINÉ AVEC SUCCÈS - 5 LOTS"
 echo "Date de fin: $(date)"
 echo "=========================================="
 echo ""
 echo "Résultats disponibles dans: ${BASE_DIR}"
-echo "Rapport: ${REPORT_FILE}"
-echo "Statistiques: ${STATS_FILE}"
+echo ""
+echo "Fichiers importants:"
+echo " • Rapport: ${REPORT_FILE}"
+echo " • Tableau récapitulatif: ${SUMMARY_TABLE}"
 echo ""
 echo "Prochaines étapes:"
-echo " 1. Consultez les rapports MultiQC dans 02_quality_check/"
-echo " 2. Explorez les visualisations Krona dans 08_krona/"
-echo " 3. Analysez les tables MPA dans 09_mpa_tables/ avec R"
-echo " 4. Comparez les 4 stratégies:"
-echo "    - Recette1 (Aviti)"
-echo "    - Recette2 (Aviti)"
-echo "    - Recette2 (Illumina)"
-echo "    - Recette2 (Aviti + Illumina combinés)"
-echo ""
-echo "Environnement conda utilisé: coprolites-pipeline"
-echo "  (Un seul environnement, aucune erreur de transition!)"
+echo " 1. Consultez les rapports MultiQC (RAW et CLEAN)"
+echo " 2. Analysez le tableau récapitulatif des séquences"
+echo " 3. Explorez les visualisations Krona"
+echo " 4. Comparez les 5 lots avec R"
 echo ""
 
-# Désactivation de l'environnement conda
+
+# Désactivation conda
 conda deactivate
 
-# Envoi d'un email de notification (si configuré)
-echo "Pipeline Coprolites terminé le $(date). Résultats: ${BASE_DIR}" | \
-    mail -s "Pipeline Coprolites - Terminé" pierrelouis.stenger@gmail.com 2>/dev/null || true
+# Notification email
+mail -s "Pipeline Coprolites 5 lots terminé" pierrelouis.stenger@gmail.com <<< "Pipeline terminé le $(date). Résultats: ${BASE_DIR}"
 
 exit 0
