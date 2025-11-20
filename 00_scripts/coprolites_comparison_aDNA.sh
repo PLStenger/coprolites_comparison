@@ -26,7 +26,7 @@ BBDUK="/home/plstenge/bbmap/bbduk.sh"
 CLUMPIFY="/home/plstenge/bbmap/clumpify.sh"
 PHIX="/home/plstenge/bbmap/resources/phix174_ill.ref.fa.gz"
 KRAKEN2_DB="/home/plstenge/k2_core_nt_20250609"
-KRAKENTOOLS_DIR="${BASE_DIR}/07_kraken2/KrakenTools"
+KRAKENTOOLS_DIR="${BASE_DIR}/08_kraken2/KrakenTools"
 THREADS=36
 
 # Définition des lots
@@ -539,44 +539,44 @@ fi
 #done
 #
 #echo "Classification Kraken2 terminée."
-
-################################################################################
-# ÉTAPE 8: Visualisation Krona
-################################################################################
-
-echo ""
-echo "=== ÉTAPE 8: Visualisation (Krona) ==="
-
-
-for lot in "${LOTS[@]}"; do
-    echo "Krona pour ${lot}..."
-    
-    IN_DIR="${BASE_DIR}/08_kraken2/${lot}"
-    OUT_DIR="${BASE_DIR}/09_krona/${lot}"
-    
-    cd "$IN_DIR"
-    
-    # Krona combiné pour tous les échantillons du lot
-    if ls *.report 1> /dev/null 2>&1; then
-        echo " → Génération Krona combiné pour ${lot}..."
-        ktImportTaxonomy -t 5 -m 3 -o "${OUT_DIR}/all_samples_krona.html" "${IN_DIR}"/*.report 2>&1 || {
-            echo "   ✗ ERREUR Krona combiné pour ${lot}"
-        }
-    fi
-    
-    # Krona individuel pour chaque échantillon
-    for report in "${IN_DIR}"/*.report; do
-        if [[ -f "$report" ]]; then
-            base=$(basename "$report" .report)
-            echo " → Génération Krona pour ${base}..."
-            ktImportTaxonomy -t 5 -m 3 -o "${OUT_DIR}/${base}_krona.html" "$report" 2>&1 || {
-                echo "   ✗ ERREUR Krona pour ${base}"
-            }
-        fi
-    done
-done
-
-echo "Visualisation Krona terminée."
+#
+#################################################################################
+## ÉTAPE 8: Visualisation Krona
+#################################################################################
+#
+#echo ""
+#echo "=== ÉTAPE 8: Visualisation (Krona) ==="
+#
+#
+#for lot in "${LOTS[@]}"; do
+#    echo "Krona pour ${lot}..."
+#    
+#    IN_DIR="${BASE_DIR}/08_kraken2/${lot}"
+#    OUT_DIR="${BASE_DIR}/09_krona/${lot}"
+#    
+#    cd "$IN_DIR"
+#    
+#    # Krona combiné pour tous les échantillons du lot
+#    if ls *.report 1> /dev/null 2>&1; then
+#        echo " → Génération Krona combiné pour ${lot}..."
+#        ktImportTaxonomy -t 5 -m 3 -o "${OUT_DIR}/all_samples_krona.html" "${IN_DIR}"/*.report 2>&1 || {
+#            echo "   ✗ ERREUR Krona combiné pour ${lot}"
+#        }
+#    fi
+#    
+#    # Krona individuel pour chaque échantillon
+#    for report in "${IN_DIR}"/*.report; do
+#        if [[ -f "$report" ]]; then
+#            base=$(basename "$report" .report)
+#            echo " → Génération Krona pour ${base}..."
+#            ktImportTaxonomy -t 5 -m 3 -o "${OUT_DIR}/${base}_krona.html" "$report" 2>&1 || {
+#                echo "   ✗ ERREUR Krona pour ${base}"
+#            }
+#        fi
+#    done
+#done
+#
+#echo "Visualisation Krona terminée."
 
 ################################################################################
 # ÉTAPE 9: Tables MPA
