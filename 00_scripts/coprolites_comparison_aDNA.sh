@@ -68,6 +68,18 @@ source ~/.bashrc
 conda activate metagenomics
 echo "Environnement activé: metagenomics"
 
+echo ""
+echo "=== Initialisation de la taxonomie Krona ==="
+# Vérifier si la taxonomie Krona est installée
+KRONA_TAX_DIR=$(conda env list | grep metagenomics | awk '{print $NF}')/opt/krona/taxonomy
+if [[ ! -d "$KRONA_TAX_DIR" ]] || [[ ! -f "$KRONA_TAX_DIR/taxonomy.tab" ]]; then
+    echo "Taxonomie Krona absente. Installation en cours..."
+    ktUpdateTaxonomy.sh "$KRONA_TAX_DIR"
+    echo "Taxonomie Krona installée avec succès."
+else
+    echo "Taxonomie Krona déjà installée."
+fi
+
 #################################################################################
 ## CRÉATION ARBORESCENCE
 #################################################################################
@@ -535,17 +547,6 @@ echo "Environnement activé: metagenomics"
 echo ""
 echo "=== ÉTAPE 8: Visualisation (Krona) ==="
 
-echo ""
-echo "=== Initialisation de la taxonomie Krona ==="
-# Vérifier si la taxonomie Krona est installée
-KRONA_TAX_DIR=$(conda env list | grep coprolites-pipeline | awk '{print $NF}')/opt/krona/taxonomy
-if [[ ! -d "$KRONA_TAX_DIR" ]] || [[ ! -f "$KRONA_TAX_DIR/taxonomy.tab" ]]; then
-    echo "Taxonomie Krona absente. Installation en cours..."
-    ktUpdateTaxonomy.sh "$KRONA_TAX_DIR"
-    echo "Taxonomie Krona installée avec succès."
-else
-    echo "Taxonomie Krona déjà installée."
-fi
 
 for lot in "${LOTS[@]}"; do
     echo "Krona pour ${lot}..."
