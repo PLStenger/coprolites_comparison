@@ -713,6 +713,13 @@ MAPPING_INFO="${BASE_DIR}/11_summary_tables/mapping_bwa_info.tsv"
 
 mkdir -p $DAMAGE_BASE
 
+echo "load conda mapdamage_py39"
+
+module load conda/4.12.0
+source ~/.bashrc
+conda activate mapdamage_py39
+
+
 echo "Script MapDamage started at $(date)" | tee -a "$LOGFILE"
 
 # Initialiser le fichier de mapping info avec les en-têtes
