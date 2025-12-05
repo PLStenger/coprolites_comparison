@@ -9,7 +9,6 @@
 #SBATCH --error="/home/plstenge/coprolites_comparison/00_scripts/coprolites_9lots_nb_seq.err"
 #SBATCH --output="/home/plstenge/coprolites_comparison/00_scripts/coprolites_9lots_nb_seq.out"
 
-
 ################################################################################
 # Script de récapitulation des statistiques MultiQC pour 9 lots
 # Author: Pierre-Louis Stenger
@@ -71,7 +70,7 @@ calculate_sd() {
     END {
         mean = sum / n
         variance = (sumsq - n * mean * mean) / (n - 1)
-        if (variance < 0) variance = 0  # Éviter les erreurs d'arrondi
+        if (variance < 0) variance = 0
         sd = sqrt(variance)
         printf "%.2f", sd
     }'
@@ -140,8 +139,8 @@ for lot in "${LOTS[@]}"; do
     
     # Afficher les résultats
     echo "  ✓ ${n_samples} échantillons trouvés"
-    echo "  ✓ Somme Total Sequences: $(printf "%'.0f" "$sum_ts")"
-    echo "  ✓ Moyenne Total Sequences: $(printf "%'.2f" "$mean_ts")"
+    echo "  ✓ Somme Total Sequences: $sum_ts"
+    echo "  ✓ Moyenne Total Sequences: $mean_ts"
     echo "  ✓ Écart-type Total Sequences: $sd_ts"
     echo "  ✓ Moyenne Avg Length: $mean_avg"
     echo "  ✓ Moyenne Median Length: $mean_median"
@@ -171,8 +170,3 @@ echo "Récapitulatif MultiQC terminé le $(date)" | \
     mail -s "Pipeline Coprolites - Récapitulatif MultiQC terminé" pierrelouis.stenger@gmail.com 2>/dev/null || true
 
 exit 0
-
-# Exemple de sortie attendue:
-# Lot	Total_Sequences_Sum	Total_Sequences_Mean	Total_Sequences_SD	Avg_Sequence_Length_Mean	Median_Sequence_Length_Mean
-# Lot1_Illumina	7493507	7493507.00	0.00	89.18	82.00
-# Lot2_Run1_no_filtered	6364196	6364196.00	0.00	81.92	77.00
