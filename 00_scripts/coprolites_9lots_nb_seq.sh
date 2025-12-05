@@ -95,7 +95,7 @@ for lot in "${LOTS[@]}"; do
     
     # Extraire les colonnes nécessaires (skip header, garder lignes avec cop)
     DATA_FILE=$(mktemp)
-    grep -E "^clean_cop[0-9]+_dedup" "$MULTIQC_FILE" | cut -f1,8,19,20 > "$DATA_FILE"
+    grep -E "^clean_cop[0-9]+_dedup" "$MULTIQC_FILE" | cut -f1,5,11,12 > "$DATA_FILE"
     
     # Vérifier si on a des données
     if [[ ! -s "$DATA_FILE" ]]; then
