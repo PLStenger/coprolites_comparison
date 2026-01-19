@@ -745,39 +745,11 @@ echo ""
 # ========== INITIALISATION CONDA POUR SLURM ==========
 echo "Initialisation de conda..."
 
-# Charger le module conda
-module load conda/4.12.0 2>/dev/null || { echo "✗ conda/4.12.0 non trouvé"; exit 1; }
+conda deactivate
+module load conda/4.12.0
+source ~/.bashrc
+conda activate mapdamage_py39
 
-# CRUCIAL: Initialiser conda pour bash dans le contexte SLURM
-# Trouver le chemin de conda
-CONDA_BASE=$(conda info --base 2>/dev/null) || CONDA_BASE="$HOME/miniconda3"
-
-# Source conda.sh pour activer la fonction conda
-if [[ -f "${CONDA_BASE}/etc/profile.d/conda.sh" ]]; then
-    source "${CONDA_BASE}/etc/profile.d/conda.sh"
-    echo "✓ Conda initialisé depuis ${CONDA_BASE}"
-else
-    echo "⚠ Essai avec eval..."
-    eval "$(conda shell.bash hook)" 2>/dev/null || { echo "✗ Impossible d'initialiser conda"; exit 1; }
-fi
-
-# ========== CHARGER LES MODULES ==========
-echo ""
-echo "Chargement des modules bioinformatiques..."
-
-# Modules système
-module load bwa/0.7.17 2>/dev/null || module load bwa 2>/dev/null || echo "⚠ bwa via modules non trouvé"
-module load samtools/1.15 2>/dev/null || module load samtools 2>/dev/null || echo "⚠ samtools via modules non trouvé"
-
-# ========== ACTIVER L'ENVIRONNEMENT CONDA ==========
-echo ""
-echo "Activation de l'environnement mapdamage..."
-
-# Désactiver tout environnement actif
-conda deactivate 2>/dev/null || true
-
-# Activer l'environnement mapdamage
-conda activate mapdamage_py39 || { echo "✗ ERREUR: conda activate mapdamage_py39 a échoué"; exit 1; }
 
 echo "✓ Environnement mapdamage_py39 activé"
 
