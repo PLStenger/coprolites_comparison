@@ -727,18 +727,11 @@ THREADS=36
 #SBATCH --error="/home/plstenge/coprolites_comparison/00_scripts/mapdamage.err"
 #SBATCH --output="/home/plstenge/coprolites_comparison/00_scripts/mapdamage.out"
 
-################################################################################
-# ÉTAPE 8: MapDamage - UNMERGED READS SEULEMENT
-# Version adaptée car les fichiers merged n'ont pas été générés
-################################################################################
-
 echo ""
 echo "=========================================="
 echo "ÉTAPE 8: MapDamage - Analyse des dommages (UNMERGED READS)"
 echo "=========================================="
 echo ""
-
-set -eo pipefail
 
 # ========== INITIALISATION CONDA POUR SLURM ==========
 echo "Initialisation de conda..."
@@ -774,9 +767,9 @@ done
 
 echo ""
 echo "Versions:"
-bwa 2>&1 | head -3
+bwa 2>&1 | head -1
 samtools --version | head -1
-mapDamage --version 2>&1 | head -1 || echo "  mapDamage: version inconnue"
+mapDamage --version 2>&1 | head -1 || echo "mapDamage: version inconnue"
 
 # ========== VÉRIFICATION DES RÉPERTOIRES SOURCE ==========
 echo ""
@@ -989,7 +982,7 @@ if [[ -d "$KRAKEN_UNMERGED" ]] && ls "$KRAKEN_UNMERGED"/*.kraken >/dev/null 2>&1
             # Vérifier qu'on a des résultats
             if [[ ! -f "$OUT_R1" || ! -f "$OUT_R2" || ! -s "$OUT_R1" || ! -s "$OUT_R2" ]]; then
                 echo "    ⚠ Aucun read extrait pour ${GROUP}"
-                rm -f "$OUT_R1" "$OUT_R2"
+                rm -f "$OUT_R1" "$OUT_R2" 2>/dev/null
                 continue
             fi
             
