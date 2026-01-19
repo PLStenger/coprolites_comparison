@@ -196,527 +196,527 @@ mkdir -p "${BASE_DIR}/12_mapdamage/unmerged_reads"
 
 echo "Arborescence créée."
 
-################################################################################
-# ÉTAPE 1: NETTOYAGE PAR LOT (BBDuk + FastUniq + Clumpify)
-################################################################################
-
-echo ""
-echo "=========================================="
-echo "ÉTAPE 1: Nettoyage des reads par lot"
-echo "=========================================="
-
-for lot in "${SOURCE_LOTS[@]}"; do
-    echo ""
-    echo "=========================================="
-    echo "Traitement du ${lot}"
-    echo "=========================================="
-    
-    INPUT_DIR="${BASE_DIR}/01_raw_data_merged/${lot}"
-    
-    if [[ ! -d "$INPUT_DIR" ]]; then
-        echo "⚠ Répertoire introuvable: ${INPUT_DIR}, on skip"
-        continue
-    fi
-    
-    # ------------------------------------------------------------------
-    # BBDuk
-    # ------------------------------------------------------------------
-    echo ""
-    echo "→ BBDuk pour ${lot}..."
-    BBDUK_OUT="${BASE_DIR}/03_bbduk/${lot}"
-    mkdir -p "$BBDUK_OUT"
-    
-    cd "$INPUT_DIR"
-    for r1_file in *_R1.fastq.gz; do
-        r2_file="${r1_file/_R1/_R2}"
-        if [[ ! -f "$r2_file" ]]; then
-            echo " ✗ Fichier R2 manquant pour $r1_file"
-            continue
-        fi
-        
-        base_name="${r1_file%%_R1.fastq.gz}"
-        echo " • Traitement de ${base_name}..."
-        
-        $BBDUK -Xmx4g \
-            in1="$r1_file" \
-            in2="$r2_file" \
-            out1="${BBDUK_OUT}/clean_${r1_file}" \
-            out2="${BBDUK_OUT}/clean_${r2_file}" \
-            ref=$PHIX \
-            ktrim=rl k=23 mink=11 hdist=1 \
-            tpe tbo \
-            minlen=25 \
-            qtrim=r trimq=20 \
-            stats="${BBDUK_OUT}/${base_name}_bbduk_stats.txt"
-    done
-    
-    # ------------------------------------------------------------------
-    # FastUniq
-    # ------------------------------------------------------------------
-    echo ""
-    echo "→ FastUniq pour ${lot}..."
-    FASTUNIQ_OUT="${BASE_DIR}/04_fastuniq/${lot}"
-    mkdir -p "$FASTUNIQ_OUT"
-    
-    TMP="/tmp/fastuniq_${lot}_$$"
-    mkdir -p "$TMP"
-    
-    cd "$BBDUK_OUT" || continue
-    for R1_gz in clean_*_R1.fastq.gz; do
-        base=$(echo "$R1_gz" | sed 's/_R1\.fastq\.gz//')
-        R2_gz="${base}_R2.fastq.gz"
-        
-        if [[ -f "$R2_gz" ]]; then
-            echo " • Déduplication de ${base}..."
-            R1_tmp="${TMP}/${base}_R1.fastq"
-            R2_tmp="${TMP}/${base}_R2.fastq"
-            listfile="${TMP}/${base}.list"
-            
-            zcat "$R1_gz" > "$R1_tmp"
-            zcat "$R2_gz" > "$R2_tmp"
-            echo -e "${R1_tmp}\n${R2_tmp}" > "$listfile"
-            
-            fastuniq -i "$listfile" -t q \
-                -o "${FASTUNIQ_OUT}/${base}_dedup_R1.fastq" \
-                -p "${FASTUNIQ_OUT}/${base}_dedup_R2.fastq"
-            
-            rm -f "$R1_tmp" "$R2_tmp" "$listfile"
-        fi
-    done
-    rm -rf "$TMP"
-    
-    # ------------------------------------------------------------------
-    # Clumpify
-    # ------------------------------------------------------------------
-    echo ""
-    echo "→ Clumpify pour ${lot}..."
-    CLUMPIFY_OUT="${BASE_DIR}/05_clumpify/${lot}"
-    mkdir -p "$CLUMPIFY_OUT"
-    
-    for R1 in "${FASTUNIQ_OUT}"/*_R1.fastq; do
-        R2="${R1/_R1.fastq/_R2.fastq}"
-        if [[ -f "$R2" ]]; then
-            base=$(basename "$R1" _R1.fastq)
-            echo " • Clumpify de ${base}..."
-            
-            $CLUMPIFY \
-                in="$R1" in2="$R2" \
-                out="${CLUMPIFY_OUT}/${base}_clumpify_R1.fastq.gz" \
-                out2="${CLUMPIFY_OUT}/${base}_clumpify_R2.fastq.gz" \
-                dedupe=t
-        fi
-    done
-done
-
-################################################################################
-# ÉTAPE 2: MERGE PAR RUN (avec fastp) puis CONCATENATION
-################################################################################
-
-echo ""
-echo "=========================================="
-echo "ÉTAPE 2: Merge R1+R2 par run, puis concatenation"
-echo "=========================================="
-
-# Créer répertoire intermédiaire pour les merged par run
-INTERMEDIATE_DIR="${BASE_DIR}/00_intermediate_merged"
-mkdir -p "$INTERMEDIATE_DIR"
-
-# Liste des échantillons uniques
-declare -a ALL_SAMPLES=("cop408" "cop410" "cop412" "cop414" "cop417")
-
-# Étape 2a: Merge R1+R2 pour chaque lot/run
-echo ""
-echo "→ Étape 2a: Merge R1+R2 pour chaque run..."
-
-for lot in "${SOURCE_LOTS[@]}"; do
-    echo ""
-    echo "Fastp merge pour ${lot}..."
-    INPUT_DIR="${BASE_DIR}/05_clumpify/${lot}"
-    OUTPUT_DIR="${INTERMEDIATE_DIR}/${lot}"
-    mkdir -p "$OUTPUT_DIR"
-    
-    if [[ ! -d "$INPUT_DIR" ]]; then
-        echo "⚠ Pas de données clumpify pour ${lot}"
-        continue
-    fi
-    
-    for R1 in "${INPUT_DIR}"/*_R1.fastq.gz; do
-        R2="${R1/_R1.fastq.gz/_R2.fastq.gz}"
-        if [[ -f "$R2" ]]; then
-            base=$(basename "$R1" _R1.fastq.gz)
-            echo " • Merge de ${base}..."
-            
-            fastp \
-                -i "$R1" -I "$R2" \
-                --merged_out "${OUTPUT_DIR}/${base}_merged.fastq.gz" \
-                --out1 "${OUTPUT_DIR}/${base}_unmerged_R1.fastq.gz" \
-                --out2 "${OUTPUT_DIR}/${base}_unmerged_R2.fastq.gz" \
-                --json "${OUTPUT_DIR}/${base}_fastp.json" \
-                --html "${OUTPUT_DIR}/${base}_fastp.html" \
-                --thread 4 \
-                --length_required 30 \
-                --qualified_quality_phred 20
-        fi
-    done
-done
-
-# Étape 2b: Concatenation des fichiers merged entre runs
-echo ""
-echo "→ Étape 2b: Concatenation des fichiers merged et unmerged entre runs..."
-
-FINAL_MERGED_DIR="${BASE_DIR}/06_fastp/merged_reads"
-FINAL_UNMERGED_DIR="${BASE_DIR}/06_fastp/unmerged_reads"
-mkdir -p "$FINAL_MERGED_DIR"
-mkdir -p "$FINAL_UNMERGED_DIR"
-
-for sample in "${ALL_SAMPLES[@]}"; do
-    echo ""
-    echo "=========================================="
-    echo "Concatenation pour ${sample}"
-    echo "=========================================="
-    
-    # Rechercher tous les fichiers merged pour cet échantillon
-    merged_files=()
-    unmerged_r1_files=()
-    unmerged_r2_files=()
-    
-    for lot in "${SOURCE_LOTS[@]}"; do
-        lot_dir="${INTERMEDIATE_DIR}/${lot}"
-        
-        # Chercher les fichiers merged (sans le préfixe "clean_")
-        for mf in "${lot_dir}"/clean_${sample}_dedup_clumpify_merged.fastq.gz; do
-            if [[ -f "$mf" ]]; then
-                merged_files+=("$mf")
-                echo " ✓ Trouvé merged: $(basename $mf) dans ${lot}"
-            fi
-        done
-        
-        # Chercher les fichiers unmerged
-        for uf1 in "${lot_dir}"/clean_${sample}_dedup_clumpify_unmerged_R1.fastq.gz; do
-            if [[ -f "$uf1" ]]; then
-                uf2="${uf1/_R1.fastq.gz/_R2.fastq.gz}"
-                if [[ -f "$uf2" ]]; then
-                    unmerged_r1_files+=("$uf1")
-                    unmerged_r2_files+=("$uf2")
-                    echo " ✓ Trouvé unmerged: $(basename $uf1) dans ${lot}"
-                fi
-            fi
-        done
-    done
-    
-    # Concatenation des merged
-    if [[ ${#merged_files[@]} -gt 0 ]]; then
-        echo " → Concatenation de ${#merged_files[@]} fichiers merged..."
-        cat "${merged_files[@]}" > "${FINAL_MERGED_DIR}/${sample}_final_merged.fastq.gz"
-        echo " ✓ Créé: ${sample}_final_merged.fastq.gz"
-    else
-        echo " ⚠ Aucun fichier merged trouvé pour ${sample}"
-    fi
-    
-    # Concatenation des unmerged
-    if [[ ${#unmerged_r1_files[@]} -gt 0 ]]; then
-        echo " → Concatenation de ${#unmerged_r1_files[@]} paires unmerged..."
-        cat "${unmerged_r1_files[@]}" > "${FINAL_UNMERGED_DIR}/${sample}_final_unmerged_R1.fastq.gz"
-        cat "${unmerged_r2_files[@]}" > "${FINAL_UNMERGED_DIR}/${sample}_final_unmerged_R2.fastq.gz"
-        echo " ✓ Créé: ${sample}_final_unmerged_R1/R2.fastq.gz"
-    else
-        echo " ⚠ Aucun fichier unmerged trouvé pour ${sample}"
-    fi
-done
-
-################################################################################
-# ÉTAPE 3: Contrôle qualité MERGED et UNMERGED
-################################################################################
-
-echo ""
-echo "=========================================="
-echo "ÉTAPE 3: Contrôle qualité des données merged et unmerged"
-echo "=========================================="
-
-# QC pour les merged
-QC_MERGED_DIR="${BASE_DIR}/07_quality_check_clean/merged_reads"
-mkdir -p "$QC_MERGED_DIR"
-
-echo "FastQC sur les fichiers merged..."
-for FILE in "${FINAL_MERGED_DIR}"/*.fastq.gz; do
-    if [[ -f "$FILE" ]]; then
-        echo " • FastQC sur $(basename $FILE)..."
-        fastqc "$FILE" -o "$QC_MERGED_DIR" -t 4
-    fi
-done
-
-echo "MultiQC merged..."
-cd "$QC_MERGED_DIR"
-multiqc . -n "multiqc_merged_reads.html" --force
-
-# QC pour les unmerged
-QC_UNMERGED_DIR="${BASE_DIR}/07_quality_check_clean/unmerged_reads"
-mkdir -p "$QC_UNMERGED_DIR"
-
-echo "FastQC sur les fichiers unmerged..."
-for FILE in "${FINAL_UNMERGED_DIR}"/*.fastq.gz; do
-    if [[ -f "$FILE" ]]; then
-        echo " • FastQC sur $(basename $FILE)..."
-        fastqc "$FILE" -o "$QC_UNMERGED_DIR" -t 4
-    fi
-done
-
-echo "MultiQC unmerged..."
-cd "$QC_UNMERGED_DIR"
-multiqc . -n "multiqc_unmerged_reads.html" --force
-
-################################################################################
-# ÉTAPE 4: Classification Kraken2 - MERGED
-################################################################################
-
-echo ""
-echo "=========================================="
-echo "ÉTAPE 4a: Classification taxonomique (Kraken2) - MERGED READS"
-echo "=========================================="
-
-KRAKEN_MERGED="${BASE_DIR}/08_kraken2/merged_reads"
-mkdir -p "$KRAKEN_MERGED"
-
-for sample in "${ALL_SAMPLES[@]}"; do
-    echo ""
-    echo "Kraken2 pour ${sample} (merged)..."
-    
-    # Analyse merged
-    MERGED="${FINAL_MERGED_DIR}/${sample}_final_merged.fastq.gz"
-    if [[ -f "$MERGED" ]]; then
-        echo " → Analyse merged..."
-        kraken2 --confidence 0.2 --db "$KRAKEN2_DB" --threads $THREADS \
-            --output "${KRAKEN_MERGED}/${sample}_merged.kraken" \
-            --report "${KRAKEN_MERGED}/${sample}_merged.report" \
-            "$MERGED"
-    else
-        echo " ⚠ Fichier merged absent pour ${sample}"
-    fi
-done
-
-################################################################################
-# ÉTAPE 4b: Classification Kraken2 - UNMERGED
-################################################################################
-
-echo ""
-echo "=========================================="
-echo "ÉTAPE 4b: Classification taxonomique (Kraken2) - UNMERGED READS"
-echo "=========================================="
-
-KRAKEN_UNMERGED="${BASE_DIR}/08_kraken2/unmerged_reads"
-mkdir -p "$KRAKEN_UNMERGED"
-
-for sample in "${ALL_SAMPLES[@]}"; do
-    echo ""
-    echo "Kraken2 pour ${sample} (unmerged)..."
-    
-    # Analyse unmerged
-    R1="${FINAL_UNMERGED_DIR}/${sample}_final_unmerged_R1.fastq.gz"
-    R2="${FINAL_UNMERGED_DIR}/${sample}_final_unmerged_R2.fastq.gz"
-    if [[ -f "$R1" && -f "$R2" ]]; then
-        echo " → Analyse unmerged..."
-        kraken2 --confidence 0.2 --paired --db "$KRAKEN2_DB" --threads $THREADS \
-            --output "${KRAKEN_UNMERGED}/${sample}_unmerged.kraken" \
-            --report "${KRAKEN_UNMERGED}/${sample}_unmerged.report" \
-            "$R1" "$R2"
-    else
-        echo " ⚠ Fichiers unmerged absents pour ${sample}"
-    fi
-done
-
-################################################################################
-# ÉTAPE 5: Visualisation Krona - MERGED
-################################################################################
-
-echo ""
-echo "=========================================="
-echo "ÉTAPE 5a: Visualisation (Krona) - MERGED READS"
-echo "=========================================="
-
-KRONA_MERGED="${BASE_DIR}/09_krona/merged_reads"
-mkdir -p "$KRONA_MERGED"
-
-cd "$KRAKEN_MERGED"
-
-# Krona combiné pour tous les échantillons merged
-if ls *.report 1> /dev/null 2>&1; then
-    echo " → Génération Krona combiné merged..."
-    ktImportTaxonomy -t 5 -m 3 -o "${KRONA_MERGED}/all_samples_merged_krona.html" *.report
-fi
-
-# Krona individuel pour chaque échantillon merged
-for report in *.report; do
-    if [[ -f "$report" ]]; then
-        base=$(basename "$report" .report)
-        echo " → Génération Krona pour ${base}..."
-        ktImportTaxonomy -t 5 -m 3 -o "${KRONA_MERGED}/${base}_krona.html" "$report"
-    fi
-done
-
-################################################################################
-# ÉTAPE 5b: Visualisation Krona - UNMERGED
-################################################################################
-
-echo ""
-echo "=========================================="
-echo "ÉTAPE 5b: Visualisation (Krona) - UNMERGED READS"
-echo "=========================================="
-
-KRONA_UNMERGED="${BASE_DIR}/09_krona/unmerged_reads"
-mkdir -p "$KRONA_UNMERGED"
-
-cd "$KRAKEN_UNMERGED"
-
-# Krona combiné pour tous les échantillons unmerged
-if ls *.report 1> /dev/null 2>&1; then
-    echo " → Génération Krona combiné unmerged..."
-    ktImportTaxonomy -t 5 -m 3 -o "${KRONA_UNMERGED}/all_samples_unmerged_krona.html" *.report
-fi
-
-# Krona individuel pour chaque échantillon unmerged
-for report in *.report; do
-    if [[ -f "$report" ]]; then
-        base=$(basename "$report" .report)
-        echo " → Génération Krona pour ${base}..."
-        ktImportTaxonomy -t 5 -m 3 -o "${KRONA_UNMERGED}/${base}_krona.html" "$report"
-    fi
-done
-
-################################################################################
-# ÉTAPE 6: Tables MPA - MERGED
-################################################################################
-
-echo ""
-echo "=========================================="
-echo "ÉTAPE 6a: Création des tables MPA - MERGED READS"
-echo "=========================================="
-
-if [[ ! -d "$KRAKENTOOLS_DIR" ]]; then
-    echo "Installation de KrakenTools..."
-    mkdir -p "${BASE_DIR}/08_kraken2"
-    cd "${BASE_DIR}/08_kraken2"
-    git clone https://github.com/jenniferlu717/KrakenTools.git
-fi
-
-MPA_MERGED="${BASE_DIR}/10_mpa_tables/merged_reads"
-mkdir -p "$MPA_MERGED"
-
-cd "$KRAKEN_MERGED"
-
-declare -a mpa_files_merged=()
-for report in *.report; do
-    if [[ -f "$report" ]]; then
-        base=$(basename "$report" .report)
-        mpa_file="${MPA_MERGED}/${base}.mpa"
-        echo " → Conversion de ${base}..."
-        python3 "${KRAKENTOOLS_DIR}/kreport2mpa.py" -r "$report" -o "$mpa_file"
-        mpa_files_merged+=("$mpa_file")
-    fi
-done
-
-if [[ ${#mpa_files_merged[@]} -gt 0 ]]; then
-    echo " → Combinaison de tous les fichiers MPA merged..."
-    python3 "${KRAKENTOOLS_DIR}/combine_mpa.py" -i "${mpa_files_merged[@]}" -o "${MPA_MERGED}/combined_all_merged.tsv"
-fi
-
-################################################################################
-# ÉTAPE 6b: Tables MPA - UNMERGED
-################################################################################
-
-echo ""
-echo "=========================================="
-echo "ÉTAPE 6b: Création des tables MPA - UNMERGED READS"
-echo "=========================================="
-
-MPA_UNMERGED="${BASE_DIR}/10_mpa_tables/unmerged_reads"
-mkdir -p "$MPA_UNMERGED"
-
-cd "$KRAKEN_UNMERGED"
-
-declare -a mpa_files_unmerged=()
-for report in *.report; do
-    if [[ -f "$report" ]]; then
-        base=$(basename "$report" .report)
-        mpa_file="${MPA_UNMERGED}/${base}.mpa"
-        echo " → Conversion de ${base}..."
-        python3 "${KRAKENTOOLS_DIR}/kreport2mpa.py" -r "$report" -o "$mpa_file"
-        mpa_files_unmerged+=("$mpa_file")
-    fi
-done
-
-if [[ ${#mpa_files_unmerged[@]} -gt 0 ]]; then
-    echo " → Combinaison de tous les fichiers MPA unmerged..."
-    python3 "${KRAKENTOOLS_DIR}/combine_mpa.py" -i "${mpa_files_unmerged[@]}" -o "${MPA_UNMERGED}/combined_all_unmerged.tsv"
-fi
-
-################################################################################
-# ÉTAPE 7: Tableau récapitulatif
-################################################################################
-
-echo ""
-echo "=========================================="
-echo "ÉTAPE 7: Tableau récapitulatif"
-echo "=========================================="
-
-SUMMARY_TABLE="${BASE_DIR}/11_summary_tables/sequences_summary_merged.tsv"
-
-cat > "$SUMMARY_TABLE" << 'HEADER'
-Sample	Type	Nb_sequences	Longueur_moyenne	GC_percent
-HEADER
-
-function extract_stats() {
-    local file=$1
-    local sample=$2
-    local type=$3
-    
-    if [[ ! -f "$file" ]]; then
-        return 1
-    fi
-    
-    nb_seq=$(zcat "$file" 2>/dev/null | echo $((`wc -l`/4)))
-    stats=$(zcat "$file" 2>/dev/null | awk 'NR%4==2 {
-        total_len += length($0)
-        gc_count += gsub(/[GCgc]/, "", $0)
-        at_count += gsub(/[ATat]/, "", $0)
-        count++
-    } END {
-        if (count > 0) {
-            avg_len = total_len / count
-            gc_perc = (gc_count / (gc_count + at_count)) * 100
-            printf "%.1f\t%.2f", avg_len, gc_perc
-        } else {
-            printf "0\t0"
-        }
-    }')
-    
-    echo -e "${sample}\t${type}\t${nb_seq}\t${stats}" >> "$SUMMARY_TABLE"
-}
-
-echo "Calcul des statistiques..."
-for sample in "${ALL_SAMPLES[@]}"; do
-    echo " → ${sample}..."
-    
-    merged="${FINAL_MERGED_DIR}/${sample}_final_merged.fastq.gz"
-    if [[ -f "$merged" ]]; then
-        extract_stats "$merged" "$sample" "merged"
-    fi
-    
-    unmerged_r1="${FINAL_UNMERGED_DIR}/${sample}_final_unmerged_R1.fastq.gz"
-    if [[ -f "$unmerged_r1" ]]; then
-        extract_stats "$unmerged_r1" "$sample" "unmerged_R1"
-    fi
-    
-    unmerged_r2="${FINAL_UNMERGED_DIR}/${sample}_final_unmerged_R2.fastq.gz"
-    if [[ -f "$unmerged_r2" ]]; then
-        extract_stats "$unmerged_r2" "$sample" "unmerged_R2"
-    fi
-done
-
-echo ""
-echo "Tableau récapitulatif créé: ${SUMMARY_TABLE}"
-echo ""
-echo "Aperçu:"
-head -20 "$SUMMARY_TABLE" | column -t
+#################################################################################
+## ÉTAPE 1: NETTOYAGE PAR LOT (BBDuk + FastUniq + Clumpify)
+#################################################################################
+#
+#echo ""
+#echo "=========================================="
+#echo "ÉTAPE 1: Nettoyage des reads par lot"
+#echo "=========================================="
+#
+#for lot in "${SOURCE_LOTS[@]}"; do
+#    echo ""
+#    echo "=========================================="
+#    echo "Traitement du ${lot}"
+#    echo "=========================================="
+#    
+#    INPUT_DIR="${BASE_DIR}/01_raw_data_merged/${lot}"
+#    
+#    if [[ ! -d "$INPUT_DIR" ]]; then
+#        echo "⚠ Répertoire introuvable: ${INPUT_DIR}, on skip"
+#        continue
+#    fi
+#    
+#    # ------------------------------------------------------------------
+#    # BBDuk
+#    # ------------------------------------------------------------------
+#    echo ""
+#    echo "→ BBDuk pour ${lot}..."
+#    BBDUK_OUT="${BASE_DIR}/03_bbduk/${lot}"
+#    mkdir -p "$BBDUK_OUT"
+#    
+#    cd "$INPUT_DIR"
+#    for r1_file in *_R1.fastq.gz; do
+#        r2_file="${r1_file/_R1/_R2}"
+#        if [[ ! -f "$r2_file" ]]; then
+#            echo " ✗ Fichier R2 manquant pour $r1_file"
+#            continue
+#        fi
+#        
+#        base_name="${r1_file%%_R1.fastq.gz}"
+#        echo " • Traitement de ${base_name}..."
+#        
+#        $BBDUK -Xmx4g \
+#            in1="$r1_file" \
+#            in2="$r2_file" \
+#            out1="${BBDUK_OUT}/clean_${r1_file}" \
+#            out2="${BBDUK_OUT}/clean_${r2_file}" \
+#            ref=$PHIX \
+#            ktrim=rl k=23 mink=11 hdist=1 \
+#            tpe tbo \
+#            minlen=25 \
+#            qtrim=r trimq=20 \
+#            stats="${BBDUK_OUT}/${base_name}_bbduk_stats.txt"
+#    done
+#    
+#    # ------------------------------------------------------------------
+#    # FastUniq
+#    # ------------------------------------------------------------------
+#    echo ""
+#    echo "→ FastUniq pour ${lot}..."
+#    FASTUNIQ_OUT="${BASE_DIR}/04_fastuniq/${lot}"
+#    mkdir -p "$FASTUNIQ_OUT"
+#    
+#    TMP="/tmp/fastuniq_${lot}_$$"
+#    mkdir -p "$TMP"
+#    
+#    cd "$BBDUK_OUT" || continue
+#    for R1_gz in clean_*_R1.fastq.gz; do
+#        base=$(echo "$R1_gz" | sed 's/_R1\.fastq\.gz//')
+#        R2_gz="${base}_R2.fastq.gz"
+#        
+#        if [[ -f "$R2_gz" ]]; then
+#            echo " • Déduplication de ${base}..."
+#            R1_tmp="${TMP}/${base}_R1.fastq"
+#            R2_tmp="${TMP}/${base}_R2.fastq"
+#            listfile="${TMP}/${base}.list"
+#            
+#            zcat "$R1_gz" > "$R1_tmp"
+#            zcat "$R2_gz" > "$R2_tmp"
+#            echo -e "${R1_tmp}\n${R2_tmp}" > "$listfile"
+#            
+#            fastuniq -i "$listfile" -t q \
+#                -o "${FASTUNIQ_OUT}/${base}_dedup_R1.fastq" \
+#                -p "${FASTUNIQ_OUT}/${base}_dedup_R2.fastq"
+#            
+#            rm -f "$R1_tmp" "$R2_tmp" "$listfile"
+#        fi
+#    done
+#    rm -rf "$TMP"
+#    
+#    # ------------------------------------------------------------------
+#    # Clumpify
+#    # ------------------------------------------------------------------
+#    echo ""
+#    echo "→ Clumpify pour ${lot}..."
+#    CLUMPIFY_OUT="${BASE_DIR}/05_clumpify/${lot}"
+#    mkdir -p "$CLUMPIFY_OUT"
+#    
+#    for R1 in "${FASTUNIQ_OUT}"/*_R1.fastq; do
+#        R2="${R1/_R1.fastq/_R2.fastq}"
+#        if [[ -f "$R2" ]]; then
+#            base=$(basename "$R1" _R1.fastq)
+#            echo " • Clumpify de ${base}..."
+#            
+#            $CLUMPIFY \
+#                in="$R1" in2="$R2" \
+#                out="${CLUMPIFY_OUT}/${base}_clumpify_R1.fastq.gz" \
+#                out2="${CLUMPIFY_OUT}/${base}_clumpify_R2.fastq.gz" \
+#                dedupe=t
+#        fi
+#    done
+#done
+#
+#################################################################################
+## ÉTAPE 2: MERGE PAR RUN (avec fastp) puis CONCATENATION
+#################################################################################
+#
+#echo ""
+#echo "=========================================="
+#echo "ÉTAPE 2: Merge R1+R2 par run, puis concatenation"
+#echo "=========================================="
+#
+## Créer répertoire intermédiaire pour les merged par run
+#INTERMEDIATE_DIR="${BASE_DIR}/00_intermediate_merged"
+#mkdir -p "$INTERMEDIATE_DIR"
+#
+## Liste des échantillons uniques
+#declare -a ALL_SAMPLES=("cop408" "cop410" "cop412" "cop414" "cop417")
+#
+## Étape 2a: Merge R1+R2 pour chaque lot/run
+#echo ""
+#echo "→ Étape 2a: Merge R1+R2 pour chaque run..."
+#
+#for lot in "${SOURCE_LOTS[@]}"; do
+#    echo ""
+#    echo "Fastp merge pour ${lot}..."
+#    INPUT_DIR="${BASE_DIR}/05_clumpify/${lot}"
+#    OUTPUT_DIR="${INTERMEDIATE_DIR}/${lot}"
+#    mkdir -p "$OUTPUT_DIR"
+#    
+#    if [[ ! -d "$INPUT_DIR" ]]; then
+#        echo "⚠ Pas de données clumpify pour ${lot}"
+#        continue
+#    fi
+#    
+#    for R1 in "${INPUT_DIR}"/*_R1.fastq.gz; do
+#        R2="${R1/_R1.fastq.gz/_R2.fastq.gz}"
+#        if [[ -f "$R2" ]]; then
+#            base=$(basename "$R1" _R1.fastq.gz)
+#            echo " • Merge de ${base}..."
+#            
+#            fastp \
+#                -i "$R1" -I "$R2" \
+#                --merged_out "${OUTPUT_DIR}/${base}_merged.fastq.gz" \
+#                --out1 "${OUTPUT_DIR}/${base}_unmerged_R1.fastq.gz" \
+#                --out2 "${OUTPUT_DIR}/${base}_unmerged_R2.fastq.gz" \
+#                --json "${OUTPUT_DIR}/${base}_fastp.json" \
+#                --html "${OUTPUT_DIR}/${base}_fastp.html" \
+#                --thread 4 \
+#                --length_required 30 \
+#                --qualified_quality_phred 20
+#        fi
+#    done
+#done
+#
+## Étape 2b: Concatenation des fichiers merged entre runs
+#echo ""
+#echo "→ Étape 2b: Concatenation des fichiers merged et unmerged entre runs..."
+#
+#FINAL_MERGED_DIR="${BASE_DIR}/06_fastp/merged_reads"
+#FINAL_UNMERGED_DIR="${BASE_DIR}/06_fastp/unmerged_reads"
+#mkdir -p "$FINAL_MERGED_DIR"
+#mkdir -p "$FINAL_UNMERGED_DIR"
+#
+#for sample in "${ALL_SAMPLES[@]}"; do
+#    echo ""
+#    echo "=========================================="
+#    echo "Concatenation pour ${sample}"
+#    echo "=========================================="
+#    
+#    # Rechercher tous les fichiers merged pour cet échantillon
+#    merged_files=()
+#    unmerged_r1_files=()
+#    unmerged_r2_files=()
+#    
+#    for lot in "${SOURCE_LOTS[@]}"; do
+#        lot_dir="${INTERMEDIATE_DIR}/${lot}"
+#        
+#        # Chercher les fichiers merged (sans le préfixe "clean_")
+#        for mf in "${lot_dir}"/clean_${sample}_dedup_clumpify_merged.fastq.gz; do
+#            if [[ -f "$mf" ]]; then
+#                merged_files+=("$mf")
+#                echo " ✓ Trouvé merged: $(basename $mf) dans ${lot}"
+#            fi
+#        done
+#        
+#        # Chercher les fichiers unmerged
+#        for uf1 in "${lot_dir}"/clean_${sample}_dedup_clumpify_unmerged_R1.fastq.gz; do
+#            if [[ -f "$uf1" ]]; then
+#                uf2="${uf1/_R1.fastq.gz/_R2.fastq.gz}"
+#                if [[ -f "$uf2" ]]; then
+#                    unmerged_r1_files+=("$uf1")
+#                    unmerged_r2_files+=("$uf2")
+#                    echo " ✓ Trouvé unmerged: $(basename $uf1) dans ${lot}"
+#                fi
+#            fi
+#        done
+#    done
+#    
+#    # Concatenation des merged
+#    if [[ ${#merged_files[@]} -gt 0 ]]; then
+#        echo " → Concatenation de ${#merged_files[@]} fichiers merged..."
+#        cat "${merged_files[@]}" > "${FINAL_MERGED_DIR}/${sample}_final_merged.fastq.gz"
+#        echo " ✓ Créé: ${sample}_final_merged.fastq.gz"
+#    else
+#        echo " ⚠ Aucun fichier merged trouvé pour ${sample}"
+#    fi
+#    
+#    # Concatenation des unmerged
+#    if [[ ${#unmerged_r1_files[@]} -gt 0 ]]; then
+#        echo " → Concatenation de ${#unmerged_r1_files[@]} paires unmerged..."
+#        cat "${unmerged_r1_files[@]}" > "${FINAL_UNMERGED_DIR}/${sample}_final_unmerged_R1.fastq.gz"
+#        cat "${unmerged_r2_files[@]}" > "${FINAL_UNMERGED_DIR}/${sample}_final_unmerged_R2.fastq.gz"
+#        echo " ✓ Créé: ${sample}_final_unmerged_R1/R2.fastq.gz"
+#    else
+#        echo " ⚠ Aucun fichier unmerged trouvé pour ${sample}"
+#    fi
+#done
+#
+#################################################################################
+## ÉTAPE 3: Contrôle qualité MERGED et UNMERGED
+#################################################################################
+#
+#echo ""
+#echo "=========================================="
+#echo "ÉTAPE 3: Contrôle qualité des données merged et unmerged"
+#echo "=========================================="
+#
+## QC pour les merged
+#QC_MERGED_DIR="${BASE_DIR}/07_quality_check_clean/merged_reads"
+#mkdir -p "$QC_MERGED_DIR"
+#
+#echo "FastQC sur les fichiers merged..."
+#for FILE in "${FINAL_MERGED_DIR}"/*.fastq.gz; do
+#    if [[ -f "$FILE" ]]; then
+#        echo " • FastQC sur $(basename $FILE)..."
+#        fastqc "$FILE" -o "$QC_MERGED_DIR" -t 4
+#    fi
+#done
+#
+#echo "MultiQC merged..."
+#cd "$QC_MERGED_DIR"
+#multiqc . -n "multiqc_merged_reads.html" --force
+#
+## QC pour les unmerged
+#QC_UNMERGED_DIR="${BASE_DIR}/07_quality_check_clean/unmerged_reads"
+#mkdir -p "$QC_UNMERGED_DIR"
+#
+#echo "FastQC sur les fichiers unmerged..."
+#for FILE in "${FINAL_UNMERGED_DIR}"/*.fastq.gz; do
+#    if [[ -f "$FILE" ]]; then
+#        echo " • FastQC sur $(basename $FILE)..."
+#        fastqc "$FILE" -o "$QC_UNMERGED_DIR" -t 4
+#    fi
+#done
+#
+#echo "MultiQC unmerged..."
+#cd "$QC_UNMERGED_DIR"
+#multiqc . -n "multiqc_unmerged_reads.html" --force
+#
+#################################################################################
+## ÉTAPE 4: Classification Kraken2 - MERGED
+#################################################################################
+#
+#echo ""
+#echo "=========================================="
+#echo "ÉTAPE 4a: Classification taxonomique (Kraken2) - MERGED READS"
+#echo "=========================================="
+#
+#KRAKEN_MERGED="${BASE_DIR}/08_kraken2/merged_reads"
+#mkdir -p "$KRAKEN_MERGED"
+#
+#for sample in "${ALL_SAMPLES[@]}"; do
+#    echo ""
+#    echo "Kraken2 pour ${sample} (merged)..."
+#    
+#    # Analyse merged
+#    MERGED="${FINAL_MERGED_DIR}/${sample}_final_merged.fastq.gz"
+#    if [[ -f "$MERGED" ]]; then
+#        echo " → Analyse merged..."
+#        kraken2 --confidence 0.2 --db "$KRAKEN2_DB" --threads $THREADS \
+#            --output "${KRAKEN_MERGED}/${sample}_merged.kraken" \
+#            --report "${KRAKEN_MERGED}/${sample}_merged.report" \
+#            "$MERGED"
+#    else
+#        echo " ⚠ Fichier merged absent pour ${sample}"
+#    fi
+#done
+#
+#################################################################################
+## ÉTAPE 4b: Classification Kraken2 - UNMERGED
+#################################################################################
+#
+#echo ""
+#echo "=========================================="
+#echo "ÉTAPE 4b: Classification taxonomique (Kraken2) - UNMERGED READS"
+#echo "=========================================="
+#
+#KRAKEN_UNMERGED="${BASE_DIR}/08_kraken2/unmerged_reads"
+#mkdir -p "$KRAKEN_UNMERGED"
+#
+#for sample in "${ALL_SAMPLES[@]}"; do
+#    echo ""
+#    echo "Kraken2 pour ${sample} (unmerged)..."
+#    
+#    # Analyse unmerged
+#    R1="${FINAL_UNMERGED_DIR}/${sample}_final_unmerged_R1.fastq.gz"
+#    R2="${FINAL_UNMERGED_DIR}/${sample}_final_unmerged_R2.fastq.gz"
+#    if [[ -f "$R1" && -f "$R2" ]]; then
+#        echo " → Analyse unmerged..."
+#        kraken2 --confidence 0.2 --paired --db "$KRAKEN2_DB" --threads $THREADS \
+#            --output "${KRAKEN_UNMERGED}/${sample}_unmerged.kraken" \
+#            --report "${KRAKEN_UNMERGED}/${sample}_unmerged.report" \
+#            "$R1" "$R2"
+#    else
+#        echo " ⚠ Fichiers unmerged absents pour ${sample}"
+#    fi
+#done
+#
+#################################################################################
+## ÉTAPE 5: Visualisation Krona - MERGED
+#################################################################################
+#
+#echo ""
+#echo "=========================================="
+#echo "ÉTAPE 5a: Visualisation (Krona) - MERGED READS"
+#echo "=========================================="
+#
+#KRONA_MERGED="${BASE_DIR}/09_krona/merged_reads"
+#mkdir -p "$KRONA_MERGED"
+#
+#cd "$KRAKEN_MERGED"
+#
+## Krona combiné pour tous les échantillons merged
+#if ls *.report 1> /dev/null 2>&1; then
+#    echo " → Génération Krona combiné merged..."
+#    ktImportTaxonomy -t 5 -m 3 -o "${KRONA_MERGED}/all_samples_merged_krona.html" *.report
+#fi
+#
+## Krona individuel pour chaque échantillon merged
+#for report in *.report; do
+#    if [[ -f "$report" ]]; then
+#        base=$(basename "$report" .report)
+#        echo " → Génération Krona pour ${base}..."
+#        ktImportTaxonomy -t 5 -m 3 -o "${KRONA_MERGED}/${base}_krona.html" "$report"
+#    fi
+#done
+#
+#################################################################################
+## ÉTAPE 5b: Visualisation Krona - UNMERGED
+#################################################################################
+#
+#echo ""
+#echo "=========================================="
+#echo "ÉTAPE 5b: Visualisation (Krona) - UNMERGED READS"
+#echo "=========================================="
+#
+#KRONA_UNMERGED="${BASE_DIR}/09_krona/unmerged_reads"
+#mkdir -p "$KRONA_UNMERGED"
+#
+#cd "$KRAKEN_UNMERGED"
+#
+## Krona combiné pour tous les échantillons unmerged
+#if ls *.report 1> /dev/null 2>&1; then
+#    echo " → Génération Krona combiné unmerged..."
+#    ktImportTaxonomy -t 5 -m 3 -o "${KRONA_UNMERGED}/all_samples_unmerged_krona.html" *.report
+#fi
+#
+## Krona individuel pour chaque échantillon unmerged
+#for report in *.report; do
+#    if [[ -f "$report" ]]; then
+#        base=$(basename "$report" .report)
+#        echo " → Génération Krona pour ${base}..."
+#        ktImportTaxonomy -t 5 -m 3 -o "${KRONA_UNMERGED}/${base}_krona.html" "$report"
+#    fi
+#done
+#
+#################################################################################
+## ÉTAPE 6: Tables MPA - MERGED
+#################################################################################
+#
+#echo ""
+#echo "=========================================="
+#echo "ÉTAPE 6a: Création des tables MPA - MERGED READS"
+#echo "=========================================="
+#
+#if [[ ! -d "$KRAKENTOOLS_DIR" ]]; then
+#    echo "Installation de KrakenTools..."
+#    mkdir -p "${BASE_DIR}/08_kraken2"
+#    cd "${BASE_DIR}/08_kraken2"
+#    git clone https://github.com/jenniferlu717/KrakenTools.git
+#fi
+#
+#MPA_MERGED="${BASE_DIR}/10_mpa_tables/merged_reads"
+#mkdir -p "$MPA_MERGED"
+#
+#cd "$KRAKEN_MERGED"
+#
+#declare -a mpa_files_merged=()
+#for report in *.report; do
+#    if [[ -f "$report" ]]; then
+#        base=$(basename "$report" .report)
+#        mpa_file="${MPA_MERGED}/${base}.mpa"
+#        echo " → Conversion de ${base}..."
+#        python3 "${KRAKENTOOLS_DIR}/kreport2mpa.py" -r "$report" -o "$mpa_file"
+#        mpa_files_merged+=("$mpa_file")
+#    fi
+#done
+#
+#if [[ ${#mpa_files_merged[@]} -gt 0 ]]; then
+#    echo " → Combinaison de tous les fichiers MPA merged..."
+#    python3 "${KRAKENTOOLS_DIR}/combine_mpa.py" -i "${mpa_files_merged[@]}" -o "${MPA_MERGED}/combined_all_merged.tsv"
+#fi
+#
+#################################################################################
+## ÉTAPE 6b: Tables MPA - UNMERGED
+#################################################################################
+#
+#echo ""
+#echo "=========================================="
+#echo "ÉTAPE 6b: Création des tables MPA - UNMERGED READS"
+#echo "=========================================="
+#
+#MPA_UNMERGED="${BASE_DIR}/10_mpa_tables/unmerged_reads"
+#mkdir -p "$MPA_UNMERGED"
+#
+#cd "$KRAKEN_UNMERGED"
+#
+#declare -a mpa_files_unmerged=()
+#for report in *.report; do
+#    if [[ -f "$report" ]]; then
+#        base=$(basename "$report" .report)
+#        mpa_file="${MPA_UNMERGED}/${base}.mpa"
+#        echo " → Conversion de ${base}..."
+#        python3 "${KRAKENTOOLS_DIR}/kreport2mpa.py" -r "$report" -o "$mpa_file"
+#        mpa_files_unmerged+=("$mpa_file")
+#    fi
+#done
+#
+#if [[ ${#mpa_files_unmerged[@]} -gt 0 ]]; then
+#    echo " → Combinaison de tous les fichiers MPA unmerged..."
+#    python3 "${KRAKENTOOLS_DIR}/combine_mpa.py" -i "${mpa_files_unmerged[@]}" -o "${MPA_UNMERGED}/combined_all_unmerged.tsv"
+#fi
+#
+#################################################################################
+## ÉTAPE 7: Tableau récapitulatif
+#################################################################################
+#
+#echo ""
+#echo "=========================================="
+#echo "ÉTAPE 7: Tableau récapitulatif"
+#echo "=========================================="
+#
+#SUMMARY_TABLE="${BASE_DIR}/11_summary_tables/sequences_summary_merged.tsv"
+#
+#cat > "$SUMMARY_TABLE" << 'HEADER'
+#Sample	Type	Nb_sequences	Longueur_moyenne	GC_percent
+#HEADER
+#
+#function extract_stats() {
+#    local file=$1
+#    local sample=$2
+#    local type=$3
+#    
+#    if [[ ! -f "$file" ]]; then
+#        return 1
+#    fi
+#    
+#    nb_seq=$(zcat "$file" 2>/dev/null | echo $((`wc -l`/4)))
+#    stats=$(zcat "$file" 2>/dev/null | awk 'NR%4==2 {
+#        total_len += length($0)
+#        gc_count += gsub(/[GCgc]/, "", $0)
+#        at_count += gsub(/[ATat]/, "", $0)
+#        count++
+#    } END {
+#        if (count > 0) {
+#            avg_len = total_len / count
+#            gc_perc = (gc_count / (gc_count + at_count)) * 100
+#            printf "%.1f\t%.2f", avg_len, gc_perc
+#        } else {
+#            printf "0\t0"
+#        }
+#    }')
+#    
+#    echo -e "${sample}\t${type}\t${nb_seq}\t${stats}" >> "$SUMMARY_TABLE"
+#}
+#
+#echo "Calcul des statistiques..."
+#for sample in "${ALL_SAMPLES[@]}"; do
+#    echo " → ${sample}..."
+#    
+#    merged="${FINAL_MERGED_DIR}/${sample}_final_merged.fastq.gz"
+#    if [[ -f "$merged" ]]; then
+#        extract_stats "$merged" "$sample" "merged"
+#    fi
+#    
+#    unmerged_r1="${FINAL_UNMERGED_DIR}/${sample}_final_unmerged_R1.fastq.gz"
+#    if [[ -f "$unmerged_r1" ]]; then
+#        extract_stats "$unmerged_r1" "$sample" "unmerged_R1"
+#    fi
+#    
+#    unmerged_r2="${FINAL_UNMERGED_DIR}/${sample}_final_unmerged_R2.fastq.gz"
+#    if [[ -f "$unmerged_r2" ]]; then
+#        extract_stats "$unmerged_r2" "$sample" "unmerged_R2"
+#    fi
+#done
+#
+#echo ""
+#echo "Tableau récapitulatif créé: ${SUMMARY_TABLE}"
+#echo ""
+#echo "Aperçu:"
+#head -20 "$SUMMARY_TABLE" | column -t
 
 ################################################################################
 # ÉTAPE 8: MapDamage 
@@ -755,6 +755,44 @@ declare -A TAXONS=(
      ["Corylus_avellana"]="13451:/home/plstenge/genomes/Corylus_avellana_CavTom2PMs_1_0.fasta"
 )
 
+################################################################################
+# FONCTION: Nettoyer les noms de séquences dupliqués dans un FASTA
+################################################################################
+fix_duplicate_fasta_headers() {
+    local input_fasta="$1"
+    local output_fasta="$2"
+    
+    echo " → Vérification des headers dupliqués dans le génome..."
+    
+    # Vérifier s'il y a des duplications
+    duplicates=$(grep "^>" "$input_fasta" | sort | uniq -d | wc -l)
+    
+    if [[ $duplicates -gt 0 ]]; then
+        echo " ⚠ ${duplicates} headers dupliqués détectés. Correction en cours..."
+        
+        # Créer un FASTA avec des noms uniques
+        awk '/^>/ {
+            header=$0
+            count[header]++
+            if (count[header] > 1) {
+                print header "_dup" count[header]
+            } else {
+                print header
+            }
+            next
+        }
+        {print}' "$input_fasta" > "$output_fasta"
+        
+        echo " ✓ Headers corrigés dans: $output_fasta"
+        return 0
+    else
+        echo " ✓ Aucun header dupliqué détecté"
+        # Si pas de duplication, créer un lien symbolique
+        ln -sf "$input_fasta" "$output_fasta" 2>/dev/null || cp "$input_fasta" "$output_fasta"
+        return 1
+    fi
+}
+
 # Fonction pour calculer le taux de mapping
 calculate_mapping_rate() {
     local bam_file="$1"
@@ -763,8 +801,8 @@ calculate_mapping_rate() {
     local type="$4"
     
     if [[ -f "$bam_file" ]]; then
-        local total_reads=$(samtools view -c "$bam_file")
-        local mapped_reads=$(samtools view -c -F 4 "$bam_file")
+        local total_reads=$(samtools view -c "$bam_file" 2>/dev/null || echo 0)
+        local mapped_reads=$(samtools view -c -F 4 "$bam_file" 2>/dev/null || echo 0)
         local mapping_rate=0
         
         if [[ $total_reads -gt 0 ]]; then
@@ -801,6 +839,47 @@ run_mapdamage_safe() {
     return 0
 }
 
+################################################################################
+# PRÉ-TRAITEMENT: Vérifier et corriger les génomes de référence
+################################################################################
+
+echo ""
+echo "→ Vérification des génomes de référence..."
+
+declare -A FIXED_GENOMES
+
+for GROUP in "${!TAXONS[@]}"; do
+    ORIGINAL_REF="${TAXONS[$GROUP]#*:}"
+    FIXED_REF="/home/plstenge/genomes/$(basename ${ORIGINAL_REF%.fasta}).fixed.fasta"
+    
+    echo ""
+    echo "-- Traitement du génome: ${GROUP} --"
+    
+    # Corriger les duplications si nécessaire
+    fix_duplicate_fasta_headers "$ORIGINAL_REF" "$FIXED_REF"
+    
+    # Stocker le chemin du génome corrigé
+    FIXED_GENOMES[$GROUP]="$FIXED_REF"
+    
+    # Vérifier/créer les index BWA
+    if [[ ! -f "${FIXED_REF}.bwt" ]]; then
+        echo " → Indexation BWA du génome corrigé..."
+        bwa index "$FIXED_REF" 2>>"$LOGFILE"
+        echo " ✓ Index BWA créé"
+    else
+        echo " ✓ Index BWA déjà présent"
+    fi
+    
+    # Vérifier/créer l'index samtools
+    if [[ ! -f "${FIXED_REF}.fai" ]]; then
+        echo " → Indexation samtools du génome corrigé..."
+        samtools faidx "$FIXED_REF" 2>>"$LOGFILE"
+        echo " ✓ Index samtools créé"
+    else
+        echo " ✓ Index samtools déjà présent"
+    fi
+done
+
 shopt -s nullglob
 
 ################################################################################
@@ -829,7 +908,7 @@ for KRAKEN_FILE in "${KRAKEN_MERGED}"/*.kraken; do
     # Boucle sur les espèces
     for GROUP in "${!TAXONS[@]}"; do
         TAX_ID="${TAXONS[$GROUP]%:*}"
-        REF_FASTA="${TAXONS[$GROUP]#*:}"
+        REF_FASTA="${FIXED_GENOMES[$GROUP]}"
         
         DAMAGE_DIR="${DAMAGE_MERGED_BASE}/${GROUP}"
         mkdir -p "$DAMAGE_DIR"
@@ -848,17 +927,15 @@ for KRAKEN_FILE in "${KRAKEN_MERGED}"/*.kraken; do
             echo "→ Mapping BWA single-end..."
             bwa aln -n 0.08 -l 24 -k 2 -q 20 -t 4 "$REF_FASTA" "$OUT_FASTQ" > "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sai" 2>>"$LOGFILE"
             
-            bwa samse "$REF_FASTA" "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sai" "$OUT_FASTQ" > "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sam" 2>>"$LOGFILE"
+            bwa samse "$REF_FASTA" "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sai" "$OUT_FASTQ" 2>>"$LOGFILE" | \
+            samtools view -bS - 2>>"$LOGFILE" | \
+            samtools sort -o "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sorted.bam" - 2>>"$LOGFILE"
             
-            samtools view -bS "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sam" > "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.bam" 2>>"$LOGFILE"
-            samtools sort -o "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sorted.bam" "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.bam" 2>>"$LOGFILE"
             samtools index "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sorted.bam" 2>>"$LOGFILE"
             
             calculate_mapping_rate "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sorted.bam" "$SAMPLE" "$GROUP" "merged"
             
-            rm -f "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sai" \
-                  "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sam" \
-                  "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.bam"
+            rm -f "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sai"
             
             run_mapdamage_safe "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sorted.bam" "$REF_FASTA" \
                 "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}_mapDamage" "$KRAKEN_BASE_NAME"
@@ -895,7 +972,7 @@ for KRAKEN_FILE in "${KRAKEN_UNMERGED}"/*.kraken; do
     # Boucle sur les espèces
     for GROUP in "${!TAXONS[@]}"; do
         TAX_ID="${TAXONS[$GROUP]%:*}"
-        REF_FASTA="${TAXONS[$GROUP]#*:}"
+        REF_FASTA="${FIXED_GENOMES[$GROUP]}"
         
         DAMAGE_DIR="${DAMAGE_UNMERGED_BASE}/${GROUP}"
         mkdir -p "$DAMAGE_DIR"
@@ -919,18 +996,16 @@ for KRAKEN_FILE in "${KRAKEN_UNMERGED}"/*.kraken; do
             bwa sampe "$REF_FASTA" \
                 "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}_R1.sai" \
                 "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}_R2.sai" \
-                "$OUT_R1" "$OUT_R2" > "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sam" 2>>"$LOGFILE"
+                "$OUT_R1" "$OUT_R2" 2>>"$LOGFILE" | \
+            samtools view -bS - 2>>"$LOGFILE" | \
+            samtools sort -o "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sorted.bam" - 2>>"$LOGFILE"
             
-            samtools view -bS "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sam" > "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.bam" 2>>"$LOGFILE"
-            samtools sort -o "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sorted.bam" "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.bam" 2>>"$LOGFILE"
             samtools index "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sorted.bam" 2>>"$LOGFILE"
             
             calculate_mapping_rate "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sorted.bam" "$SAMPLE" "$GROUP" "unmerged"
             
             rm -f "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}_R1.sai" \
-                  "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}_R2.sai" \
-                  "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sam" \
-                  "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.bam"
+                  "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}_R2.sai"
             
             run_mapdamage_safe "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sorted.bam" "$REF_FASTA" \
                 "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}_mapDamage" "$KRAKEN_BASE_NAME"
@@ -950,6 +1025,7 @@ echo ""
 echo "Résultats merged: ${DAMAGE_MERGED_BASE}"
 echo "Résultats unmerged: ${DAMAGE_UNMERGED_BASE}"
 echo "Statistiques: ${MAPPING_INFO}"
+
 
 ################################################################################
 # FIN
