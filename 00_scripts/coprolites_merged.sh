@@ -725,9 +725,43 @@ echo "=========================================="
 echo "ÉTAPE 8: MapDamage - Analyse des dommages"
 echo "=========================================="
 
+# ========== ACTIVATION CORRECTE DES OUTILS ==========
+echo ""
+echo "→ Activation de l'environnement conda..."
+
+# Charger conda
+module load conda/4.12.0
+source ~/.bashrc
+
+# Source conda.sh pour que conda activate fonctionne
+eval "$(conda shell.bash hook)"
+
+# Désactiver tout environnement
+conda deactivate 2>/dev/null || true
+
 # Activer l'environnement mapdamage
-conda deactivate
 conda activate mapdamage_py39
+
+# Vérifier que les outils sont disponibles
+echo "Vérification des outils..."
+for tool in bwa samtools mapDamage; do
+    if ! command -v "$tool" &> /dev/null; then
+        echo "✗ ERREUR: $tool non trouvé!"
+        echo "  Environnement conda: $(conda env list | grep '^\*' | awk '{print $NF}')"
+        echo "  PATH: $PATH"
+        exit 1
+    else
+        echo "✓ $tool trouvé: $(which $tool)"
+    fi
+done
+
+echo ""
+echo "Version des outils:"
+bwa 2>&1 | head -1
+samtools --version | head -1
+mapDamage --version 2>&1 | head -1
+
+# ========== SETUP DES RÉPERTOIRES ==========
 
 DAMAGE_MERGED_BASE="${BASE_DIR}/12_mapdamage/merged_reads"
 DAMAGE_UNMERGED_BASE="${BASE_DIR}/12_mapdamage/unmerged_reads"
@@ -753,7 +787,6 @@ declare -A TAXONS=(
      ["Corylus_avellana"]="13451:/home/plstenge/genomes/Corylus_avellana_CavTom2PMs_1_0.fasta"
 )
 
-
 ################################################################################
 # FONCTION: Nettoyer les noms de séquences dupliqués dans un FASTA
 ################################################################################
@@ -761,15 +794,14 @@ fix_duplicate_fasta_headers() {
     local input_fasta="$1"
     local output_fasta="$2"
     
-    echo " → Vérification des headers dupliqués dans le génome..."
+    echo " → Vérification des headers dupliqués..."
     
     # Vérifier s'il y a des duplications
-    duplicates=$(grep "^>" "$input_fasta" | sort | uniq -d | wc -l)
+    duplicates=$(grep "^>" "$input_fasta" 2>/dev/null | sort | uniq -d | wc -l)
     
     if [[ $duplicates -gt 0 ]]; then
-        echo " ⚠ ${duplicates} headers dupliqués détectés. Correction en cours..."
+        echo " ⚠ ${duplicates} headers dupliqués détectés. Correction..."
         
-        # Créer un FASTA avec des noms uniques
         awk '/^>/ {
             header=$0
             count[header]++
@@ -782,11 +814,10 @@ fix_duplicate_fasta_headers() {
         }
         {print}' "$input_fasta" > "$output_fasta"
         
-        echo " ✓ Headers corrigés dans: $output_fasta"
+        echo " ✓ Headers corrigés"
         return 0
     else
-        echo " ✓ Aucun header dupliqué détecté"
-        # Si pas de duplication, créer un lien symbolique
+        echo " ✓ Aucun header dupliqué"
         ln -sf "$input_fasta" "$output_fasta" 2>/dev/null || cp "$input_fasta" "$output_fasta"
         return 1
     fi
@@ -805,11 +836,11 @@ calculate_mapping_rate() {
         local mapping_rate=0
         
         if [[ $total_reads -gt 0 ]]; then
-            mapping_rate=$(echo "scale=2; $mapped_reads * 100 / $total_reads" | bc)
+            mapping_rate=$(echo "scale=2; $mapped_reads * 100 / $total_reads" | bc 2>/dev/null || echo "0")
         fi
         
         echo -e "${sample_name}\t${species}\t${type}\t${total_reads}\t${mapped_reads}\t${mapping_rate}" >> "$MAPPING_INFO"
-        echo "✓ Mapping stats for ${sample_name}_${species}_${type}: ${mapped_reads}/${total_reads} (${mapping_rate}%)" | tee -a "$LOGFILE"
+        echo "✓ ${species}: ${mapped_reads}/${total_reads} (${mapping_rate}%)" | tee -a "$LOGFILE"
     fi
 }
 
@@ -820,30 +851,29 @@ run_mapdamage_safe() {
     local output_dir="$3"
     local sample_name="$4"
     
-    echo " → MapDamage pour ${sample_name}..."
-    
     if [[ ! -s "$bam_file" ]]; then
-        echo " ✗ BAM vide ou absent, on skip MapDamage"
+        echo " ⚠ BAM vide, skip MapDamage"
         return 0
     fi
     
     mkdir -p "$output_dir"
     
+    echo " → MapDamage en cours (peut prendre 2-5 min)..."
     mapDamage -i "$bam_file" -r "$ref_fasta" --folder "$output_dir" --no-stats 2>>"$LOGFILE" || {
-        echo " ⚠ MapDamage a échoué pour ${sample_name} (erreur ignorée)"
+        echo " ⚠ MapDamage échoué (non-bloquant)"
         return 0
     }
     
-    echo " ✓ MapDamage terminé pour ${sample_name}"
+    echo " ✓ MapDamage OK"
     return 0
 }
 
 ################################################################################
-# PRÉ-TRAITEMENT: Vérifier et corriger les génomes de référence
+# PRÉ-TRAITEMENT: Indexation des génomes
 ################################################################################
 
 echo ""
-echo "→ Vérification des génomes de référence..."
+echo "→ Préparation des génomes de référence..."
 
 declare -A FIXED_GENOMES
 
@@ -852,44 +882,58 @@ for GROUP in "${!TAXONS[@]}"; do
     FIXED_REF="/home/plstenge/genomes/$(basename ${ORIGINAL_REF%.fasta}).fixed.fasta"
     
     echo ""
-    echo "-- Traitement du génome: ${GROUP} --"
+    echo "-- ${GROUP} --"
     
-    # Vérifier que le génome original existe
     if [[ ! -f "$ORIGINAL_REF" ]]; then
-        echo " ✗ Génome original non trouvé: $ORIGINAL_REF"
+        echo " ✗ Génome non trouvé: $ORIGINAL_REF"
         continue
     fi
     
-    # Corriger les duplications si nécessaire
-    fix_duplicate_fasta_headers "$ORIGINAL_REF" "$FIXED_REF"
+    # Créer lien ou copie
+    if [[ ! -f "$FIXED_REF" ]]; then
+        ln -sf "$ORIGINAL_REF" "$FIXED_REF"
+    fi
     
-    # Stocker le chemin du génome corrigé
+    # Corriger headers si nécessaire
+    fix_duplicate_fasta_headers "$ORIGINAL_REF" "$FIXED_REF"
     FIXED_GENOMES[$GROUP]="$FIXED_REF"
     
-    # Vérifier/créer les index BWA
+    # Index BWA (peut prendre 10-30 min par génome)
     if [[ ! -f "${FIXED_REF}.bwt" ]]; then
-        echo " → Indexation BWA du génome corrigé..."
-        bwa index "$FIXED_REF" 2>>"$LOGFILE" || {
-            echo " ✗ Indexation BWA échouée pour ${GROUP}"
+        echo " → Indexation BWA (peut prendre 10-30 min)..."
+        
+        set +e
+        timeout 1800 bwa index "$FIXED_REF" 2>&1 | grep -v "^\\[" | tail -10 >> "$LOGFILE"
+        EXIT_CODE=$?
+        set -e
+        
+        if [[ $EXIT_CODE -eq 124 ]]; then
+            echo " ✗ TIMEOUT: génome trop grand ou indexation très lente"
+            echo " → Tentative avec samtools faidx (plus rapide)..."
+            samtools faidx "$FIXED_REF" 2>&1 | tail -5 >> "$LOGFILE"
+            echo " ℹ Génome indexé avec samtools (BWA peut être lent)"
+        elif [[ $EXIT_CODE -ne 0 ]]; then
+            echo " ✗ Indexation échouée (code: $EXIT_CODE)"
             continue
-        }
-        echo " ✓ Index BWA créé"
+        else
+            echo " ✓ Index BWA créé"
+        fi
     else
         echo " ✓ Index BWA déjà présent"
     fi
     
-    # Vérifier/créer l'index samtools
+    # Index samtools
     if [[ ! -f "${FIXED_REF}.fai" ]]; then
-        echo " → Indexation samtools du génome corrigé..."
-        samtools faidx "$FIXED_REF" 2>>"$LOGFILE" || {
-            echo " ✗ Indexation samtools échouée pour ${GROUP}"
-            continue
-        }
+        echo " → Indexation samtools..."
+        samtools faidx "$FIXED_REF" 2>>"$LOGFILE"
         echo " ✓ Index samtools créé"
     else
         echo " ✓ Index samtools déjà présent"
     fi
 done
+
+echo ""
+echo "Génomes préparés: ${#FIXED_GENOMES[@]}"
 
 shopt -s nullglob
 
@@ -898,145 +942,153 @@ shopt -s nullglob
 ################################################################################
 
 echo ""
-echo "→ MapDamage pour MERGED READS..."
+echo "=========================================="
+echo "ÉTAPE 8a: MapDamage pour MERGED READS"
+echo "=========================================="
 
 KRAKEN_MERGED="${BASE_DIR}/08_kraken2/merged_reads"
 FINAL_MERGED_DIR="${BASE_DIR}/06_fastp/merged_reads"
 
-for KRAKEN_FILE in "${KRAKEN_MERGED}"/*.kraken; do
-    [[ -f "$KRAKEN_FILE" ]] || continue
-    KRAKEN_BASE_NAME=$(basename "$KRAKEN_FILE" .kraken)
-    
-    echo ""
-    echo "=========================================="
-    echo "Traitement: ${KRAKEN_BASE_NAME} (merged)"
-    echo "=========================================="
-    
-    SAMPLE="${KRAKEN_BASE_NAME%_merged}"
-    FASTQ_FILE="${FINAL_MERGED_DIR}/${SAMPLE}_final_merged.fastq.gz"
-    
-    if [[ ! -f "$FASTQ_FILE" || ! -s "$FASTQ_FILE" ]]; then
-        echo "⚠ Fichier FASTQ merged absent ou vide: ${FASTQ_FILE}"
-        continue
-    fi
-    
-    # Boucle sur les espèces
-    for GROUP in "${!TAXONS[@]}"; do
-        REF_FASTA="${FIXED_GENOMES[$GROUP]}"
-        [[ -z "$REF_FASTA" ]] && continue
-        
-        TAX_ID="${TAXONS[$GROUP]%:*}"
-        
-        DAMAGE_DIR="${DAMAGE_MERGED_BASE}/${GROUP}"
-        mkdir -p "$DAMAGE_DIR"
+[[ -d "$KRAKEN_MERGED" ]] || { echo "⚠ Pas de fichiers Kraken merged"; KRAKEN_MERGED=""; }
+
+if [[ -n "$KRAKEN_MERGED" && -d "$KRAKEN_MERGED" ]]; then
+    for KRAKEN_FILE in "$KRAKEN_MERGED"/*.kraken; do
+        [[ -f "$KRAKEN_FILE" ]] || continue
+        KRAKEN_BASE_NAME=$(basename "$KRAKEN_FILE" .kraken)
         
         echo ""
-        echo "-- Espèce: ${GROUP} (TaxID: ${TAX_ID}) --"
+        echo "→ ${KRAKEN_BASE_NAME} (merged)"
         
-        OUT_FASTQ="${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.fastq"
+        SAMPLE="${KRAKEN_BASE_NAME%_merged}"
+        FASTQ_FILE="${FINAL_MERGED_DIR}/${SAMPLE}_final_merged.fastq.gz"
         
-        echo "→ Extraction reads merged..."
-        python3 "${KRAKENTOOLS_DIR}/extract_kraken_reads.py" \
-            -k "$KRAKEN_FILE" -s "$FASTQ_FILE" -t "$TAX_ID" \
-            -o "$OUT_FASTQ" --fastq-output 2>>"$LOGFILE"
-        
-        if [[ -f "$OUT_FASTQ" && -s "$OUT_FASTQ" ]]; then
-            echo "→ Mapping BWA single-end..."
-            bwa aln -n 0.08 -l 24 -k 2 -q 20 -t 4 "$REF_FASTA" "$OUT_FASTQ" > "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sai" 2>>"$LOGFILE"
-            
-            bwa samse "$REF_FASTA" "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sai" "$OUT_FASTQ" 2>>"$LOGFILE" | \
-            samtools view -bS - 2>>"$LOGFILE" | \
-            samtools sort -o "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sorted.bam" - 2>>"$LOGFILE"
-            
-            samtools index "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sorted.bam" 2>>"$LOGFILE"
-            
-            calculate_mapping_rate "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sorted.bam" "$SAMPLE" "$GROUP" "merged"
-            
-            rm -f "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sai"
-            
-            run_mapdamage_safe "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sorted.bam" "$REF_FASTA" \
-                "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}_mapDamage" "$KRAKEN_BASE_NAME"
-        else
-            echo " ⚠ Aucun read extrait pour ${GROUP}"
+        if [[ ! -f "$FASTQ_FILE" || ! -s "$FASTQ_FILE" ]]; then
+            echo " ⚠ FASTQ absent ou vide"
+            continue
         fi
+        
+        for GROUP in "${!TAXONS[@]}"; do
+            REF_FASTA="${FIXED_GENOMES[$GROUP]}"
+            [[ -z "$REF_FASTA" ]] && continue
+            
+            TAX_ID="${TAXONS[$GROUP]%:*}"
+            DAMAGE_DIR="${DAMAGE_MERGED_BASE}/${GROUP}"
+            mkdir -p "$DAMAGE_DIR"
+            
+            OUT_FASTQ="${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.fastq"
+            
+            echo -n "  → ${GROUP}: extraction..."
+            python3 "${KRAKENTOOLS_DIR}/extract_kraken_reads.py" \
+                -k "$KRAKEN_FILE" -s "$FASTQ_FILE" -t "$TAX_ID" \
+                -o "$OUT_FASTQ" --fastq-output 2>>"$LOGFILE"
+            
+            if [[ -f "$OUT_FASTQ" && -s "$OUT_FASTQ" ]]; then
+                READS_COUNT=$(grep -c "^@" "$OUT_FASTQ" 2>/dev/null || echo "0")
+                echo " $READS_COUNT reads → mapping..."
+                
+                # Mapping
+                bwa aln -n 0.08 -l 24 -k 2 -q 20 -t 4 "$REF_FASTA" "$OUT_FASTQ" \
+                    > "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sai" 2>>"$LOGFILE"
+                
+                bwa samse "$REF_FASTA" \
+                    "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sai" \
+                    "$OUT_FASTQ" 2>>"$LOGFILE" | \
+                samtools view -bS - 2>>"$LOGFILE" | \
+                samtools sort -o "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sorted.bam" - 2>>"$LOGFILE"
+                
+                samtools index "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sorted.bam" 2>>"$LOGFILE"
+                calculate_mapping_rate "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sorted.bam" "$SAMPLE" "$GROUP" "merged"
+                
+                rm -f "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sai" "$OUT_FASTQ"
+                
+                run_mapdamage_safe "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sorted.bam" "$REF_FASTA" \
+                    "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}_mapDamage" "$KRAKEN_BASE_NAME"
+            else
+                echo " aucun read"
+            fi
+        done
     done
-done
+fi
 
 ################################################################################
 # ÉTAPE 8b: MapDamage - UNMERGED READS
 ################################################################################
 
 echo ""
-echo "→ MapDamage pour UNMERGED READS..."
+echo "=========================================="
+echo "ÉTAPE 8b: MapDamage pour UNMERGED READS"
+echo "=========================================="
 
 KRAKEN_UNMERGED="${BASE_DIR}/08_kraken2/unmerged_reads"
 FINAL_UNMERGED_DIR="${BASE_DIR}/06_fastp/unmerged_reads"
 
-for KRAKEN_FILE in "${KRAKEN_UNMERGED}"/*.kraken; do
-    [[ -f "$KRAKEN_FILE" ]] || continue
-    KRAKEN_BASE_NAME=$(basename "$KRAKEN_FILE" .kraken)
-    
-    echo ""
-    echo "=========================================="
-    echo "Traitement: ${KRAKEN_BASE_NAME} (unmerged)"
-    echo "=========================================="
-    
-    SAMPLE="${KRAKEN_BASE_NAME%_unmerged}"
-    R1_FILE="${FINAL_UNMERGED_DIR}/${SAMPLE}_final_unmerged_R1.fastq.gz"
-    R2_FILE="${FINAL_UNMERGED_DIR}/${SAMPLE}_final_unmerged_R2.fastq.gz"
-    
-    if [[ ! -f "$R1_FILE" || ! -f "$R2_FILE" || ! -s "$R1_FILE" || ! -s "$R2_FILE" ]]; then
-        echo "⚠ Fichiers FASTQ unmerged absents ou vides"
-        continue
-    fi
-    
-    # Boucle sur les espèces
-    for GROUP in "${!TAXONS[@]}"; do
-        REF_FASTA="${FIXED_GENOMES[$GROUP]}"
-        [[ -z "$REF_FASTA" ]] && continue
-        
-        TAX_ID="${TAXONS[$GROUP]%:*}"
-        
-        DAMAGE_DIR="${DAMAGE_UNMERGED_BASE}/${GROUP}"
-        mkdir -p "$DAMAGE_DIR"
+[[ -d "$KRAKEN_UNMERGED" ]] || { echo "⚠ Pas de fichiers Kraken unmerged"; KRAKEN_UNMERGED=""; }
+
+if [[ -n "$KRAKEN_UNMERGED" && -d "$KRAKEN_UNMERGED" ]]; then
+    for KRAKEN_FILE in "$KRAKEN_UNMERGED"/*.kraken; do
+        [[ -f "$KRAKEN_FILE" ]] || continue
+        KRAKEN_BASE_NAME=$(basename "$KRAKEN_FILE" .kraken)
         
         echo ""
-        echo "-- Espèce: ${GROUP} (TaxID: ${TAX_ID}) --"
+        echo "→ ${KRAKEN_BASE_NAME} (unmerged)"
         
-        OUT_R1="${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}_R1.fastq"
-        OUT_R2="${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}_R2.fastq"
+        SAMPLE="${KRAKEN_BASE_NAME%_unmerged}"
+        R1_FILE="${FINAL_UNMERGED_DIR}/${SAMPLE}_final_unmerged_R1.fastq.gz"
+        R2_FILE="${FINAL_UNMERGED_DIR}/${SAMPLE}_final_unmerged_R2.fastq.gz"
         
-        echo "→ Extraction reads paired-end..."
-        python3 "${KRAKENTOOLS_DIR}/extract_kraken_reads.py" \
-            -k "$KRAKEN_FILE" -s "$R1_FILE" -s2 "$R2_FILE" -t "$TAX_ID" \
-            -o "$OUT_R1" -o2 "$OUT_R2" --fastq-output 2>>"$LOGFILE"
-        
-        if [[ -f "$OUT_R1" && -f "$OUT_R2" && -s "$OUT_R1" && -s "$OUT_R2" ]]; then
-            echo "→ Mapping BWA paired-end..."
-            bwa aln -n 0.08 -l 24 -k 2 -q 20 -t 4 "$REF_FASTA" "$OUT_R1" > "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}_R1.sai" 2>>"$LOGFILE"
-            bwa aln -n 0.08 -l 24 -k 2 -q 20 -t 4 "$REF_FASTA" "$OUT_R2" > "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}_R2.sai" 2>>"$LOGFILE"
-            
-            bwa sampe "$REF_FASTA" \
-                "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}_R1.sai" \
-                "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}_R2.sai" \
-                "$OUT_R1" "$OUT_R2" 2>>"$LOGFILE" | \
-            samtools view -bS - 2>>"$LOGFILE" | \
-            samtools sort -o "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sorted.bam" - 2>>"$LOGFILE"
-            
-            samtools index "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sorted.bam" 2>>"$LOGFILE"
-            
-            calculate_mapping_rate "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sorted.bam" "$SAMPLE" "$GROUP" "unmerged"
-            
-            rm -f "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}_R1.sai" \
-                  "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}_R2.sai"
-            
-            run_mapdamage_safe "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sorted.bam" "$REF_FASTA" \
-                "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}_mapDamage" "$KRAKEN_BASE_NAME"
-        else
-            echo " ⚠ Aucun read extrait pour ${GROUP}"
+        if [[ ! -f "$R1_FILE" || ! -f "$R2_FILE" || ! -s "$R1_FILE" || ! -s "$R2_FILE" ]]; then
+            echo " ⚠ FASTQ absent ou vide"
+            continue
         fi
+        
+        for GROUP in "${!TAXONS[@]}"; do
+            REF_FASTA="${FIXED_GENOMES[$GROUP]}"
+            [[ -z "$REF_FASTA" ]] && continue
+            
+            TAX_ID="${TAXONS[$GROUP]%:*}"
+            DAMAGE_DIR="${DAMAGE_UNMERGED_BASE}/${GROUP}"
+            mkdir -p "$DAMAGE_DIR"
+            
+            OUT_R1="${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}_R1.fastq"
+            OUT_R2="${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}_R2.fastq"
+            
+            echo -n "  → ${GROUP}: extraction..."
+            python3 "${KRAKENTOOLS_DIR}/extract_kraken_reads.py" \
+                -k "$KRAKEN_FILE" -s "$R1_FILE" -s2 "$R2_FILE" -t "$TAX_ID" \
+                -o "$OUT_R1" -o2 "$OUT_R2" --fastq-output 2>>"$LOGFILE"
+            
+            if [[ -f "$OUT_R1" && -f "$OUT_R2" && -s "$OUT_R1" && -s "$OUT_R2" ]]; then
+                READS_COUNT=$(grep -c "^@" "$OUT_R1" 2>/dev/null || echo "0")
+                echo " $READS_COUNT paires → mapping..."
+                
+                # Mapping paired-end
+                bwa aln -n 0.08 -l 24 -k 2 -q 20 -t 4 "$REF_FASTA" "$OUT_R1" \
+                    > "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}_R1.sai" 2>>"$LOGFILE"
+                bwa aln -n 0.08 -l 24 -k 2 -q 20 -t 4 "$REF_FASTA" "$OUT_R2" \
+                    > "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}_R2.sai" 2>>"$LOGFILE"
+                
+                bwa sampe "$REF_FASTA" \
+                    "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}_R1.sai" \
+                    "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}_R2.sai" \
+                    "$OUT_R1" "$OUT_R2" 2>>"$LOGFILE" | \
+                samtools view -bS - 2>>"$LOGFILE" | \
+                samtools sort -o "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sorted.bam" - 2>>"$LOGFILE"
+                
+                samtools index "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sorted.bam" 2>>"$LOGFILE"
+                calculate_mapping_rate "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sorted.bam" "$SAMPLE" "$GROUP" "unmerged"
+                
+                rm -f "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}_R1.sai" \
+                      "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}_R2.sai" \
+                      "$OUT_R1" "$OUT_R2"
+                
+                run_mapdamage_safe "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}.sorted.bam" "$REF_FASTA" \
+                    "${DAMAGE_DIR}/${KRAKEN_BASE_NAME}_${GROUP}_mapDamage" "$KRAKEN_BASE_NAME"
+            else
+                echo " aucun read"
+            fi
+        done
     done
-done
+fi
 
 shopt -u nullglob
 
@@ -1045,9 +1097,10 @@ echo "=========================================="
 echo "MapDamage terminé!"
 echo "=========================================="
 echo ""
-echo "Résultats merged: ${DAMAGE_MERGED_BASE}"
-echo "Résultats unmerged: ${DAMAGE_UNMERGED_BASE}"
-echo "Statistiques: ${MAPPING_INFO}"
+echo "Log complet: $LOGFILE"
+echo "Statistiques: $MAPPING_INFO"
+echo ""
+
 
 ################################################################################
 # FIN
