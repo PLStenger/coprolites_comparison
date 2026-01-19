@@ -158,14 +158,12 @@ conda activate metagenomics
 echo "Environnement activé: metagenomics"
 
 echo ""
-echo "=== Initialisation de la taxonomie Krona ==="
-KRONA_TAX_DIR=$(conda env list | grep metagenomics | awk '{print $NF}')/opt/krona/taxonomy
-if [[ ! -d "$KRONA_TAX_DIR" ]] || [[ ! -f "$KRONA_TAX_DIR/taxonomy.tab" ]]; then
-    echo "Taxonomie Krona absente. Installation en cours..."
-    ktUpdateTaxonomy.sh "$KRONA_TAX_DIR"
-    echo "Taxonomie Krona installée avec succès."
+echo "=== Vérification taxonomie Krona (optionnelle) ===" 
+# Vérification simple sans appel à ktUpdateTaxonomy
+if command -v ktImportTaxonomy >/dev/null 2>&1; then
+    echo "✓ Krona disponible"
 else
-    echo "Taxonomie Krona déjà installée."
+    echo "⚠ Krona non trouvé mais les analyses continueront"
 fi
 
 ################################################################################
