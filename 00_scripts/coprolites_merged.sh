@@ -719,7 +719,7 @@ echo "Arborescence créée."
 #head -20 "$SUMMARY_TABLE" | column -t
 
 ################################################################################
-# ÉTAPE 8: MapDamage 
+# ÉTAPE 8: MapDamage (Ovis aries & Capra hircus & Phragmites)
 ################################################################################
 
 echo ""
@@ -754,6 +754,7 @@ declare -A TAXONS=(
      ["Phragmites_australis"]="29695:/home/plstenge/genomes/Phragmites_australis_GCA_040373225.1.fasta"
      ["Corylus_avellana"]="13451:/home/plstenge/genomes/Corylus_avellana_CavTom2PMs_1_0.fasta"
 )
+
 
 ################################################################################
 # FONCTION: Nettoyer les noms de séquences dupliqués dans un FASTA
@@ -855,6 +856,12 @@ for GROUP in "${!TAXONS[@]}"; do
     echo ""
     echo "-- Traitement du génome: ${GROUP} --"
     
+    # Vérifier que le génome original existe
+    if [[ ! -f "$ORIGINAL_REF" ]]; then
+        echo " ✗ Génome original non trouvé: $ORIGINAL_REF"
+        continue
+    fi
+    
     # Corriger les duplications si nécessaire
     fix_duplicate_fasta_headers "$ORIGINAL_REF" "$FIXED_REF"
     
@@ -864,7 +871,10 @@ for GROUP in "${!TAXONS[@]}"; do
     # Vérifier/créer les index BWA
     if [[ ! -f "${FIXED_REF}.bwt" ]]; then
         echo " → Indexation BWA du génome corrigé..."
-        bwa index "$FIXED_REF" 2>>"$LOGFILE"
+        bwa index "$FIXED_REF" 2>>"$LOGFILE" || {
+            echo " ✗ Indexation BWA échouée pour ${GROUP}"
+            continue
+        }
         echo " ✓ Index BWA créé"
     else
         echo " ✓ Index BWA déjà présent"
@@ -873,7 +883,10 @@ for GROUP in "${!TAXONS[@]}"; do
     # Vérifier/créer l'index samtools
     if [[ ! -f "${FIXED_REF}.fai" ]]; then
         echo " → Indexation samtools du génome corrigé..."
-        samtools faidx "$FIXED_REF" 2>>"$LOGFILE"
+        samtools faidx "$FIXED_REF" 2>>"$LOGFILE" || {
+            echo " ✗ Indexation samtools échouée pour ${GROUP}"
+            continue
+        }
         echo " ✓ Index samtools créé"
     else
         echo " ✓ Index samtools déjà présent"
@@ -889,7 +902,11 @@ shopt -s nullglob
 echo ""
 echo "→ MapDamage pour MERGED READS..."
 
+KRAKEN_MERGED="${BASE_DIR}/08_kraken2/merged_reads"
+FINAL_MERGED_DIR="${BASE_DIR}/06_fastp/merged_reads"
+
 for KRAKEN_FILE in "${KRAKEN_MERGED}"/*.kraken; do
+    [[ -f "$KRAKEN_FILE" ]] || continue
     KRAKEN_BASE_NAME=$(basename "$KRAKEN_FILE" .kraken)
     
     echo ""
@@ -900,15 +917,17 @@ for KRAKEN_FILE in "${KRAKEN_MERGED}"/*.kraken; do
     SAMPLE="${KRAKEN_BASE_NAME%_merged}"
     FASTQ_FILE="${FINAL_MERGED_DIR}/${SAMPLE}_final_merged.fastq.gz"
     
-    if [[ ! -f "$FASTQ_FILE" ]]; then
-        echo "⚠ Fichier FASTQ merged absent: ${FASTQ_FILE}"
+    if [[ ! -f "$FASTQ_FILE" || ! -s "$FASTQ_FILE" ]]; then
+        echo "⚠ Fichier FASTQ merged absent ou vide: ${FASTQ_FILE}"
         continue
     fi
     
     # Boucle sur les espèces
     for GROUP in "${!TAXONS[@]}"; do
-        TAX_ID="${TAXONS[$GROUP]%:*}"
         REF_FASTA="${FIXED_GENOMES[$GROUP]}"
+        [[ -z "$REF_FASTA" ]] && continue
+        
+        TAX_ID="${TAXONS[$GROUP]%:*}"
         
         DAMAGE_DIR="${DAMAGE_MERGED_BASE}/${GROUP}"
         mkdir -p "$DAMAGE_DIR"
@@ -952,7 +971,11 @@ done
 echo ""
 echo "→ MapDamage pour UNMERGED READS..."
 
+KRAKEN_UNMERGED="${BASE_DIR}/08_kraken2/unmerged_reads"
+FINAL_UNMERGED_DIR="${BASE_DIR}/06_fastp/unmerged_reads"
+
 for KRAKEN_FILE in "${KRAKEN_UNMERGED}"/*.kraken; do
+    [[ -f "$KRAKEN_FILE" ]] || continue
     KRAKEN_BASE_NAME=$(basename "$KRAKEN_FILE" .kraken)
     
     echo ""
@@ -964,15 +987,17 @@ for KRAKEN_FILE in "${KRAKEN_UNMERGED}"/*.kraken; do
     R1_FILE="${FINAL_UNMERGED_DIR}/${SAMPLE}_final_unmerged_R1.fastq.gz"
     R2_FILE="${FINAL_UNMERGED_DIR}/${SAMPLE}_final_unmerged_R2.fastq.gz"
     
-    if [[ ! -f "$R1_FILE" || ! -f "$R2_FILE" ]]; then
-        echo "⚠ Fichiers FASTQ unmerged absents"
+    if [[ ! -f "$R1_FILE" || ! -f "$R2_FILE" || ! -s "$R1_FILE" || ! -s "$R2_FILE" ]]; then
+        echo "⚠ Fichiers FASTQ unmerged absents ou vides"
         continue
     fi
     
     # Boucle sur les espèces
     for GROUP in "${!TAXONS[@]}"; do
-        TAX_ID="${TAXONS[$GROUP]%:*}"
         REF_FASTA="${FIXED_GENOMES[$GROUP]}"
+        [[ -z "$REF_FASTA" ]] && continue
+        
+        TAX_ID="${TAXONS[$GROUP]%:*}"
         
         DAMAGE_DIR="${DAMAGE_UNMERGED_BASE}/${GROUP}"
         mkdir -p "$DAMAGE_DIR"
@@ -1025,7 +1050,6 @@ echo ""
 echo "Résultats merged: ${DAMAGE_MERGED_BASE}"
 echo "Résultats unmerged: ${DAMAGE_UNMERGED_BASE}"
 echo "Statistiques: ${MAPPING_INFO}"
-
 
 ################################################################################
 # FIN
