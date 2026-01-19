@@ -33,168 +33,168 @@ KRAKEN2_DB="/home/plstenge/k2_core_nt_20250609"
 KRAKENTOOLS_DIR="${BASE_DIR}/08_kraken2/KrakenTools"
 THREADS=36
 
-################################################################################
-# ORGANISATION DES DONNÉES - 5 LOTS À MERGER
-################################################################################
-
-echo ""
-echo "=========================================="
-echo "ÉTAPE 0: Organisation des données - 5 LOTS"
-echo "=========================================="
-
-mkdir -p "${BASE_DIR}/01_raw_data_merged"
-mkdir -p "${BASE_DIR}/00_scripts"
-
-# Définition des 5 lots sources
-declare -a SOURCE_LOTS=(
-    "Lot1_illu-4_R1_Ps4_150_Default"
-    "Lot2_Run1_R2_Ps6_150_no_filter"
-    "Lot4_Run2_R2_Ps6_150_no_filter"
-    "Lot6_Run3_R3_Ps8_150_no_filter"
-    "Lot9_Run4_R3_Ps8_75_no_filter"
-)
-
-# Mapping des lots vers leurs chemins sources
-declare -A LOT_SOURCE
-declare -A LOT_MODE
-
-LOT_SOURCE["Lot1_illu-4_R1_Ps4_150_Default"]="/home/plstenge/coprolites_comparison/01_raw_data/Lot1_Illumina_R1"
-LOT_MODE["Lot1_illu-4_R1_Ps4_150_Default"]="flat"
-
-LOT_SOURCE["Lot2_Run1_R2_Ps6_150_no_filter"]="/storage/groups/gdec/shared_paleo/E1531_final/run1_20250320_AV241601_E1531_Ps5Lane1_Ps6Lane2"
-LOT_MODE["Lot2_Run1_R2_Ps6_150_no_filter"]="subdirs"
-
-LOT_SOURCE["Lot4_Run2_R2_Ps6_150_no_filter"]="/storage/groups/gdec/shared_paleo/E1531_final/run2_20250414_AV241601_E1531_Ps5_Ps6_14042025"
-LOT_MODE["Lot4_Run2_R2_Ps6_150_no_filter"]="subdirs"
-
-LOT_SOURCE["Lot6_Run3_R3_Ps8_150_no_filter"]="/storage/groups/gdec/shared_paleo/E1531_final/run3_20251008_AV241601_E1531_Ps7_Ps8"
-LOT_MODE["Lot6_Run3_R3_Ps8_150_no_filter"]="subdirs"
-
-LOT_SOURCE["Lot9_Run4_R3_Ps8_75_no_filter"]="/storage/groups/gdec/shared_paleo/E1531_final/run4_20251104_AV241601_E1531_Ps7_Ps8_04112025"
-LOT_MODE["Lot9_Run4_R3_Ps8_75_no_filter"]="subdirs"
-
-# Organisation des données brutes
-shopt -s nullglob
-
-for lot in "${SOURCE_LOTS[@]}"; do
-    SRC_DIR="${LOT_SOURCE[$lot]}"
-    MODE="${LOT_MODE[$lot]}"
-    DEST_DIR="${BASE_DIR}/01_raw_data_merged/${lot}"
-    
-    echo ""
-    echo "------------------------------------------"
-    echo "Organisation du ${lot}"
-    echo "Source : ${SRC_DIR}"
-    echo "Destination : ${DEST_DIR}"
-    echo "Mode : ${MODE}"
-    echo "------------------------------------------"
-    
-    # Vérification source
-    if [[ ! -d "$SRC_DIR" ]]; then
-        echo "⚠ ATTENTION: répertoire source introuvable pour ${lot} : ${SRC_DIR}"
-        continue
-    fi
-    
-    mkdir -p "$DEST_DIR"
-    
-    # Mode flat (Lot1 Illumina)
-    if [[ "$MODE" == "flat" ]]; then
-        echo "Création de liens symboliques pour ${lot} (mode flat)..."
-        for fq in "${SRC_DIR}"/cop*_R[12].fastq.gz; do
-            base_fq=$(basename "$fq")
-            if [[ -e "${DEST_DIR}/${base_fq}" ]]; then
-                echo " ↪ Lien déjà présent pour ${base_fq}, on saute."
-            else
-                ln -s "$fq" "${DEST_DIR}/${base_fq}"
-                echo " ✓ Lien créé: ${base_fq}"
-            fi
-        done
-    
-    # Mode subdirs (Lots 2, 4, 6, 9)
-    elif [[ "$MODE" == "subdirs" ]]; then
-        echo "Recherche des sous-dossiers copXXX dans ${SRC_DIR}..."
-        for d in "${SRC_DIR}"/[0-9]*_cop[0-9][0-9][0-9]; do
-            [[ -d "$d" ]] || continue
-            folder_name=$(basename "$d")
-            sample_id="${folder_name#*_}"
-            
-            R1_SRC="${d}/${folder_name}_R1.fastq.gz"
-            R2_SRC="${d}/${folder_name}_R2.fastq.gz"
-            
-            if [[ -f "$R1_SRC" && -f "$R2_SRC" ]]; then
-                R1_DEST="${DEST_DIR}/${sample_id}_R1.fastq.gz"
-                R2_DEST="${DEST_DIR}/${sample_id}_R2.fastq.gz"
-                
-                if [[ -e "$R1_DEST" || -e "$R2_DEST" ]]; then
-                    echo " ↪ Liens déjà présents pour ${sample_id} dans ${lot}, on saute."
-                else
-                    ln -s "$R1_SRC" "$R1_DEST"
-                    ln -s "$R2_SRC" "$R2_DEST"
-                    echo " ✓ ${sample_id} lié (${folder_name}_R1/R2.fastq.gz → ${sample_id}_R1/R2.fastq.gz)"
-                fi
-            else
-                echo " ⚠ Fichiers R1/R2 manquants pour ${folder_name} dans ${SRC_DIR}"
-            fi
-        done
-    fi
-done
-
-shopt -u nullglob
-
-echo ""
-echo "=========================================="
-echo "Organisation des données terminée"
-echo "=========================================="
-
-################################################################################
-# ACTIVATION ENVIRONNEMENT CONDA
-################################################################################
-
-echo ""
-echo "=== Activation environnement conda ==="
-module load conda/4.12.0
-source ~/.bashrc
-conda activate metagenomics
-echo "Environnement activé: metagenomics"
-
-echo ""
-echo "=== Vérification taxonomie Krona (optionnelle) ===" 
-# Vérification simple sans appel à ktUpdateTaxonomy
-if command -v ktImportTaxonomy >/dev/null 2>&1; then
-    echo "✓ Krona disponible"
-else
-    echo "⚠ Krona non trouvé mais les analyses continueront"
-fi
-
-################################################################################
-# CRÉATION ARBORESCENCE
-################################################################################
-
-echo ""
-echo "=== Création de l'arborescence ==="
-
-mkdir -p "${BASE_DIR}/02_quality_check_raw/merged"
-mkdir -p "${BASE_DIR}/03_bbduk/merged"
-mkdir -p "${BASE_DIR}/04_fastuniq/merged"
-mkdir -p "${BASE_DIR}/05_clumpify/merged"
-mkdir -p "${BASE_DIR}/06_fastp/merged_reads"
-mkdir -p "${BASE_DIR}/06_fastp/unmerged_reads"
-mkdir -p "${BASE_DIR}/07_quality_check_clean/merged_reads"
-mkdir -p "${BASE_DIR}/07_quality_check_clean/unmerged_reads"
-mkdir -p "${BASE_DIR}/08_kraken2/merged_reads"
-mkdir -p "${BASE_DIR}/08_kraken2/unmerged_reads"
-mkdir -p "${BASE_DIR}/09_krona/merged_reads"
-mkdir -p "${BASE_DIR}/09_krona/unmerged_reads"
-mkdir -p "${BASE_DIR}/10_mpa_tables/merged_reads"
-mkdir -p "${BASE_DIR}/10_mpa_tables/unmerged_reads"
-mkdir -p "${BASE_DIR}/11_summary_tables"
-mkdir -p "${BASE_DIR}/00_intermediate_merged"
-mkdir -p "${BASE_DIR}/12_mapdamage/merged_reads"
-mkdir -p "${BASE_DIR}/12_mapdamage/unmerged_reads"
-
-echo "Arborescence créée."
-
 #################################################################################
+## ORGANISATION DES DONNÉES - 5 LOTS À MERGER
+#################################################################################
+#
+#echo ""
+#echo "=========================================="
+#echo "ÉTAPE 0: Organisation des données - 5 LOTS"
+#echo "=========================================="
+#
+#mkdir -p "${BASE_DIR}/01_raw_data_merged"
+#mkdir -p "${BASE_DIR}/00_scripts"
+#
+## Définition des 5 lots sources
+#declare -a SOURCE_LOTS=(
+#    "Lot1_illu-4_R1_Ps4_150_Default"
+#    "Lot2_Run1_R2_Ps6_150_no_filter"
+#    "Lot4_Run2_R2_Ps6_150_no_filter"
+#    "Lot6_Run3_R3_Ps8_150_no_filter"
+#    "Lot9_Run4_R3_Ps8_75_no_filter"
+#)
+#
+## Mapping des lots vers leurs chemins sources
+#declare -A LOT_SOURCE
+#declare -A LOT_MODE
+#
+#LOT_SOURCE["Lot1_illu-4_R1_Ps4_150_Default"]="/home/plstenge/coprolites_comparison/01_raw_data/Lot1_Illumina_R1"
+#LOT_MODE["Lot1_illu-4_R1_Ps4_150_Default"]="flat"
+#
+#LOT_SOURCE["Lot2_Run1_R2_Ps6_150_no_filter"]="/storage/groups/gdec/shared_paleo/E1531_final/run1_20250320_AV241601_E1531_Ps5Lane1_Ps6Lane2"
+#LOT_MODE["Lot2_Run1_R2_Ps6_150_no_filter"]="subdirs"
+#
+#LOT_SOURCE["Lot4_Run2_R2_Ps6_150_no_filter"]="/storage/groups/gdec/shared_paleo/E1531_final/run2_20250414_AV241601_E1531_Ps5_Ps6_14042025"
+#LOT_MODE["Lot4_Run2_R2_Ps6_150_no_filter"]="subdirs"
+#
+#LOT_SOURCE["Lot6_Run3_R3_Ps8_150_no_filter"]="/storage/groups/gdec/shared_paleo/E1531_final/run3_20251008_AV241601_E1531_Ps7_Ps8"
+#LOT_MODE["Lot6_Run3_R3_Ps8_150_no_filter"]="subdirs"
+#
+#LOT_SOURCE["Lot9_Run4_R3_Ps8_75_no_filter"]="/storage/groups/gdec/shared_paleo/E1531_final/run4_20251104_AV241601_E1531_Ps7_Ps8_04112025"
+#LOT_MODE["Lot9_Run4_R3_Ps8_75_no_filter"]="subdirs"
+#
+## Organisation des données brutes
+#shopt -s nullglob
+#
+#for lot in "${SOURCE_LOTS[@]}"; do
+#    SRC_DIR="${LOT_SOURCE[$lot]}"
+#    MODE="${LOT_MODE[$lot]}"
+#    DEST_DIR="${BASE_DIR}/01_raw_data_merged/${lot}"
+#    
+#    echo ""
+#    echo "------------------------------------------"
+#    echo "Organisation du ${lot}"
+#    echo "Source : ${SRC_DIR}"
+#    echo "Destination : ${DEST_DIR}"
+#    echo "Mode : ${MODE}"
+#    echo "------------------------------------------"
+#    
+#    # Vérification source
+#    if [[ ! -d "$SRC_DIR" ]]; then
+#        echo "⚠ ATTENTION: répertoire source introuvable pour ${lot} : ${SRC_DIR}"
+#        continue
+#    fi
+#    
+#    mkdir -p "$DEST_DIR"
+#    
+#    # Mode flat (Lot1 Illumina)
+#    if [[ "$MODE" == "flat" ]]; then
+#        echo "Création de liens symboliques pour ${lot} (mode flat)..."
+#        for fq in "${SRC_DIR}"/cop*_R[12].fastq.gz; do
+#            base_fq=$(basename "$fq")
+#            if [[ -e "${DEST_DIR}/${base_fq}" ]]; then
+#                echo " ↪ Lien déjà présent pour ${base_fq}, on saute."
+#            else
+#                ln -s "$fq" "${DEST_DIR}/${base_fq}"
+#                echo " ✓ Lien créé: ${base_fq}"
+#            fi
+#        done
+#    
+#    # Mode subdirs (Lots 2, 4, 6, 9)
+#    elif [[ "$MODE" == "subdirs" ]]; then
+#        echo "Recherche des sous-dossiers copXXX dans ${SRC_DIR}..."
+#        for d in "${SRC_DIR}"/[0-9]*_cop[0-9][0-9][0-9]; do
+#            [[ -d "$d" ]] || continue
+#            folder_name=$(basename "$d")
+#            sample_id="${folder_name#*_}"
+#            
+#            R1_SRC="${d}/${folder_name}_R1.fastq.gz"
+#            R2_SRC="${d}/${folder_name}_R2.fastq.gz"
+#            
+#            if [[ -f "$R1_SRC" && -f "$R2_SRC" ]]; then
+#                R1_DEST="${DEST_DIR}/${sample_id}_R1.fastq.gz"
+#                R2_DEST="${DEST_DIR}/${sample_id}_R2.fastq.gz"
+#                
+#                if [[ -e "$R1_DEST" || -e "$R2_DEST" ]]; then
+#                    echo " ↪ Liens déjà présents pour ${sample_id} dans ${lot}, on saute."
+#                else
+#                    ln -s "$R1_SRC" "$R1_DEST"
+#                    ln -s "$R2_SRC" "$R2_DEST"
+#                    echo " ✓ ${sample_id} lié (${folder_name}_R1/R2.fastq.gz → ${sample_id}_R1/R2.fastq.gz)"
+#                fi
+#            else
+#                echo " ⚠ Fichiers R1/R2 manquants pour ${folder_name} dans ${SRC_DIR}"
+#            fi
+#        done
+#    fi
+#done
+#
+#shopt -u nullglob
+#
+#echo ""
+#echo "=========================================="
+#echo "Organisation des données terminée"
+#echo "=========================================="
+#
+#################################################################################
+## ACTIVATION ENVIRONNEMENT CONDA
+#################################################################################
+#
+#echo ""
+#echo "=== Activation environnement conda ==="
+#module load conda/4.12.0
+#source ~/.bashrc
+#conda activate metagenomics
+#echo "Environnement activé: metagenomics"
+#
+#echo ""
+#echo "=== Vérification taxonomie Krona (optionnelle) ===" 
+## Vérification simple sans appel à ktUpdateTaxonomy
+#if command -v ktImportTaxonomy >/dev/null 2>&1; then
+#    echo "✓ Krona disponible"
+#else
+#    echo "⚠ Krona non trouvé mais les analyses continueront"
+#fi
+#
+#################################################################################
+## CRÉATION ARBORESCENCE
+#################################################################################
+#
+#echo ""
+#echo "=== Création de l'arborescence ==="
+#
+#mkdir -p "${BASE_DIR}/02_quality_check_raw/merged"
+#mkdir -p "${BASE_DIR}/03_bbduk/merged"
+#mkdir -p "${BASE_DIR}/04_fastuniq/merged"
+#mkdir -p "${BASE_DIR}/05_clumpify/merged"
+#mkdir -p "${BASE_DIR}/06_fastp/merged_reads"
+#mkdir -p "${BASE_DIR}/06_fastp/unmerged_reads"
+#mkdir -p "${BASE_DIR}/07_quality_check_clean/merged_reads"
+#mkdir -p "${BASE_DIR}/07_quality_check_clean/unmerged_reads"
+#mkdir -p "${BASE_DIR}/08_kraken2/merged_reads"
+#mkdir -p "${BASE_DIR}/08_kraken2/unmerged_reads"
+#mkdir -p "${BASE_DIR}/09_krona/merged_reads"
+#mkdir -p "${BASE_DIR}/09_krona/unmerged_reads"
+#mkdir -p "${BASE_DIR}/10_mpa_tables/merged_reads"
+#mkdir -p "${BASE_DIR}/10_mpa_tables/unmerged_reads"
+#mkdir -p "${BASE_DIR}/11_summary_tables"
+#mkdir -p "${BASE_DIR}/00_intermediate_merged"
+#mkdir -p "${BASE_DIR}/12_mapdamage/merged_reads"
+#mkdir -p "${BASE_DIR}/12_mapdamage/unmerged_reads"
+#
+#echo "Arborescence créée."
+#
+##################################################################################
 ## ÉTAPE 1: NETTOYAGE PAR LOT (BBDuk + FastUniq + Clumpify)
 #################################################################################
 #
@@ -727,11 +727,6 @@ echo "Arborescence créée."
 #SBATCH --error="/home/plstenge/coprolites_comparison/00_scripts/mapdamage.err"
 #SBATCH --output="/home/plstenge/coprolites_comparison/00_scripts/mapdamage.out"
 
-set -eo pipefail
-
-BASE_DIR="/home/plstenge/coprolites_comparison"
-KRAKENTOOLS_DIR="${BASE_DIR}/08_kraken2/KrakenTools"
-
 ################################################################################
 # ÉTAPE 8: MapDamage - VERSION FINALE AVEC CONDA INIT
 ################################################################################
@@ -745,11 +740,9 @@ echo ""
 # ========== INITIALISATION CONDA POUR SLURM ==========
 echo "Initialisation de conda..."
 
-conda deactivate
 module load conda/4.12.0
 source ~/.bashrc
 conda activate mapdamage_py39
-
 
 echo "✓ Environnement mapdamage_py39 activé"
 
