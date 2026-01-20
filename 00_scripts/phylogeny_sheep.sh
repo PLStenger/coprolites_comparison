@@ -78,7 +78,7 @@ echo "$(date): Pipeline phylogénie démarré" | tee -a "$LOGFILE"
 # ========== GÉNOMES DE RÉFÉRENCE ==========
 
 # Référence mouflon pour consensus (TRÈS IMPORTANT pour éviter biais)
-MOUFLON_REF="/home/plstenge/genomes/Ovis_orientalis_mtDNA.fa"
+MOUFLON_REF="/home/plstenge/genomes/Ovis_aries_mitochondrion/Ovis_aries_mitochondrion.fa"
 MOUFLON_GENBANK="NC_001941"  # Accession GenBank si besoin de télécharger
 
 # Si références mouton moderne pour phylogénie
