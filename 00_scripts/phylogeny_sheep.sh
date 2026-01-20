@@ -1,13 +1,4 @@
 #!/bin/bash
-
-################################################################################
-# ÉTAPE 9 & 10: PHYLOGÉNIE ADN ANCIEN - MOUTON
-# Récupération des reads mappés → Consensus mtDNA → Phylogénie (RAxML + BEAST)
-# 
-# Dépend de: ÉTAPE 8 (MapDamage, fichiers BAM mappés)
-# Génère: Alignements FASTA → Arbres phylogénétiques
-################################################################################
-
 #SBATCH --job-name=coprolites_phylogeny
 #SBATCH --ntasks=1
 #SBATCH -p smp
@@ -17,7 +8,13 @@
 #SBATCH --error="/home/plstenge/coprolites_comparison/00_scripts/phylogeny.err"
 #SBATCH --output="/home/plstenge/coprolites_comparison/00_scripts/phylogeny.out"
 
-set -euo pipefail
+################################################################################
+# ÉTAPE 9 & 10: PHYLOGÉNIE ADN ANCIEN - MOUTON
+# Récupération des reads mappés → Consensus mtDNA → Phylogénie (RAxML + BEAST)
+# 
+# Dépend de: ÉTAPE 8 (MapDamage, fichiers BAM mappés)
+# Génère: Alignements FASTA → Arbres phylogénétiques
+################################################################################
 
 echo ""
 echo "=========================================="
