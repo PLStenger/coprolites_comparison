@@ -188,6 +188,36 @@ if [[ $N_SAMPLES -eq 0 ]]; then
 fi
 
 ################################################################################
+# ÉTAPE 9.1b: OPTION POOLING (si couverture faible)
+################################################################################
+
+ENABLE_POOLING=true  # Mettre à false pour désactiver
+
+if [[ "$ENABLE_POOLING" == "true" && ${#SHEEP_BAMS[@]} -gt 1 ]]; then
+    echo ""
+    echo "=========================================="
+    echo "ÉTAPE 9.1b: Création échantillon poolé"
+    echo "=========================================="
+    echo ""
+    
+    POOLED_BAM="${BAM_EXTRACTION_DIR}/POOLED_all_sheep.bam"
+    
+    echo "Pooling de ${#SHEEP_BAMS[@]} échantillons..."
+    samtools merge -@ 8 -f "$POOLED_BAM" "${SHEEP_BAMS[@]}"
+    samtools index "$POOLED_BAM"
+    
+    # Vérifier couverture du pooled
+    POOLED_COV=$(samtools depth "$POOLED_BAM" | awk '{sum+=$3; count++} END {printf "%.1f", sum/count}')
+    echo "✓ BAM poolé créé: couverture ${POOLED_COV}X"
+    
+    # Ajouter à la liste
+    SHEEP_BAMS=("$POOLED_BAM")
+    
+    echo ""
+fi
+
+
+################################################################################
 # ÉTAPE 9.2: GÉNÉRATION DES CONSENSUS MITOCHONDRIAUX
 ################################################################################
 
