@@ -18,8 +18,6 @@
 #SBATCH --error="/home/plstenge/coprolites_comparison/00_scripts/phylogeny_fixed.err"
 #SBATCH --output="/home/plstenge/coprolites_comparison/00_scripts/phylogeny_fixed.out"
 
-set -euo pipefail
-
 echo ""
 echo "=========================================="
 echo "PHYLOGÉNIE ADN ANCIEN MOUTON - VERSION FIXÉE"
