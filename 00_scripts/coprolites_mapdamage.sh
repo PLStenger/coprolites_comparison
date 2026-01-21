@@ -93,15 +93,27 @@ echo "$(date): Script MapDamage UNMERGED démarré" | tee -a "$LOGFILE"
 # Initialiser le fichier de mapping info
 echo -e "Sample\tSpecies\tType\tTotal_Reads\tMapped_Reads\tMapping_Rate(%)" > "$MAPPING_INFO"
 
-# Génomes de référence
+# ========== GÉNOMES DE RÉFÉRENCE - CONFIGURATION ==========
+# Chaque entrée : TAXONS["nom_espece"]="taxid:/chemin/vers/genome.fasta"
+
 declare -A TAXONS=(
-   # ["Ovis_aries"]="9940:/home/plstenge/genomes/Ovis_aries.ARS-UI_Ramb_v3.0.dna.toplevel.fa"
-   # ["Capra_hircus"]="9925:/home/plstenge/genomes/Capra_hircus.ARS1.dna.toplevel.fa"
+    # === Espèces testées et fonctionnelles (historique) ===
+    # ["Ovis_aries"]="9940:/home/plstenge/genomes/Ovis_aries/Ovis_aries.ARS-UI_Ramb_v3.0.dna.toplevel.fa"
+    # ["Capra_hircus"]="9925:/home/plstenge/genomes/Capra_hircus/Capra_hircus.ARS1.dna.toplevel.fa"
+    # ["Corylus_avellana"]="13451:/home/plstenge/genomes/Corylus_avellana/Corylus_avellana_CavTom2PMs_1_0.fasta"
+    # ["Alnus_glutinosa"]="3517:/home/plstenge/genomes/Alnus_glutinosa/Alnus_glutinosa_genome_assembly_dhAlnGlut1.fa"
+    # ["Dryopteris"]="3287:/home/plstenge/genomes/Dryopteris_crassirhizoma/Dryopteris_crassirhizoma_mitochondrion.fna"
+    
+    # === Espèces en debug ===
     ["Bos_taurus"]="9903:/home/plstenge/genomes/Bos_taurus/GCF_002263795.3_ARS-UCD2.0_genomic.fna"
-    #["Alnus_glutinosa"]="3517:/home/plstenge/genomes/Alnus_glutinosa_genome_assembly_dhAlnGlut1.fa"
-    ["Phragmites_australis"]="29695:/home/plstenge/genomes/Phragmites_australis_GCA_040373225.1.fasta"
-    ["Dryopteris"]="3287:/home/plstenge/genomes/Dryopteris_crassirhizoma/Dryopteris_crassirhizoma_mitochondrion.fna"
-    #["Corylus_avellana"]="13451:/home/plstenge/genomes/Corylus_avellana_CavTom2PMs_1_0.fasta"
+    ["Phragmites_australis"]="29695:/home/plstenge/genomes/Phragmites_australis/Phragmites_australis_GCA_040373225.1.uniq.fa"
+    
+    # === Espèces à ajouter ===
+    ["Populus"]="3689:/home/plstenge/genomes/Populus_nigra/CATOPT01.fasta"
+    ["Trifolium"]="3334059:/home/plstenge/genomes/Trifolium_pratense/FKJA01.fasta"
+    ["Malus"]="3749:/home/plstenge/genomes/Malus_domestica/GCF_042453785.1_GDT2T_hap1_genomic.fna"
+    ["Quercus"]="3511:/home/plstenge/genomes/Quercus_robur/Qrob_PM1N.fa"
+    ["Daucus_carota"]="4039:/home/plstenge/genomes/Daucus_carota/LNRQ01.fasta"
 )
 
 echo ""
@@ -132,10 +144,11 @@ calculate_mapping_rate() {
     fi
 }
 
-run_mapdamage_safe() {
+run_mapdamage_with_length_dist() {
     local bam_file="$1"
     local ref_fasta="$2"
     local output_dir="$3"
+    local read_type="$4"  # "paired" ou "single"
     
     if [[ ! -s "$bam_file" ]]; then
         echo "    ⚠ Fichier BAM vide ou inexistant"
@@ -144,15 +157,28 @@ run_mapdamage_safe() {
     
     mkdir -p "$output_dir"
     echo -n "    → MapDamage en cours..."
-    if mapDamage -i "$bam_file" -r "$ref_fasta" --folder "$output_dir" --no-stats 2>>"$LOGFILE"; then
-        echo " ✓ OK"
+    
+    # Pour les reads single-end (comme R1 seul), mapDamage peut tracer la distribution de longueurs
+    # Pour paired-end, ça n'a pas de sens (les fragmentts ne sont pas fusionnés)
+    if [[ "$read_type" == "single" ]]; then
+        # Mode single-end : on peut avoir une distribution de longueurs
+        if mapDamage -i "$bam_file" -r "$ref_fasta" --folder "$output_dir" 2>>"$LOGFILE"; then
+            echo " ✓ OK (avec distribution de longueurs)"
+        else
+            echo " ⚠ (échoué - non bloquant)"
+        fi
     else
-        echo " ⚠ (échoué - non bloquant)"
+        # Mode paired-end : mapDamage trace les dommages mais pas la distrib de longueurs
+        if mapDamage -i "$bam_file" -r "$ref_fasta" --folder "$output_dir" --no-stats 2>>"$LOGFILE"; then
+            echo " ✓ OK"
+        else
+            echo " ⚠ (échoué - non bloquant)"
+        fi
     fi
 }
 
 ################################################################################
-# INDEXATION DES GÉNOMES
+# INDEXATION DES GÉNOMES (VERSION SIMPLIFIÉE - SANS .fixed.fa)
 ################################################################################
 
 echo ""
@@ -164,11 +190,11 @@ declare -A FIXED_GENOMES
 
 for GROUP in "${!TAXONS[@]}"; do
     ORIGINAL_REF="${TAXONS[$GROUP]#*:}"
-    FIXED_REF="/home/plstenge/genomes/$(basename "${ORIGINAL_REF%.*}").fixed.fa"
     
     echo ""
     echo "→ ${GROUP}"
     
+    # Vérifier que le FASTA existe
     if [[ ! -f "$ORIGINAL_REF" ]]; then
         echo "  ✗ Génome non trouvé: $ORIGINAL_REF"
         continue
@@ -176,45 +202,58 @@ for GROUP in "${!TAXONS[@]}"; do
     
     echo "  Source: $(du -h "$ORIGINAL_REF" | cut -f1)"
     
-    # Créer lien symbolique
-    ln -sf "$ORIGINAL_REF" "$FIXED_REF" 2>/dev/null
-    FIXED_GENOMES[$GROUP]="$FIXED_REF"
-    
-    # Index BWA (peut prendre du temps)
-    if [[ ! -f "${FIXED_REF}.bwt" ]]; then
-        echo "  → Indexation BWA (peut prendre 10-30 min)..."
-        timeout 1800 bwa index "$FIXED_REF" 2>&1 | grep -v "^\[" | tail -3 >> "$LOGFILE"
+    # ====== INDEX BWA ======
+    if [[ ! -f "${ORIGINAL_REF}.bwt" ]]; then
+        echo "  → Indexation BWA (peut prendre 10-60 min pour gros génomes)..."
+        bwa index "$ORIGINAL_REF" 2>>"$LOGFILE"
         
-        if [[ -f "${FIXED_REF}.bwt" ]]; then
-            echo "  ✓ Index BWA créé"
+        # Vérifier que l'index est complet
+        if [[ -f "${ORIGINAL_REF}.bwt" ]] && \
+           [[ -f "${ORIGINAL_REF}.amb" ]] && \
+           [[ -f "${ORIGINAL_REF}.ann" ]] && \
+           [[ -f "${ORIGINAL_REF}.pac" ]] && \
+           [[ -f "${ORIGINAL_REF}.sa" ]]; then
+            echo "  ✓ Index BWA créé (complet)"
         else
-            echo "  ⚠ Index BWA incomplet"
+            echo "  ✗ Index BWA incomplet - on skippe ${GROUP}"
+            continue
         fi
     else
         echo "  ✓ Index BWA existant"
     fi
     
-    # Index samtools
-    if [[ ! -f "${FIXED_REF}.fai" ]]; then
-        samtools faidx "$FIXED_REF" 2>/dev/null
+    # ====== INDEX SAMTOOLS ======
+    if [[ ! -f "${ORIGINAL_REF}.fai" ]]; then
+        samtools faidx "$ORIGINAL_REF" 2>>"$LOGFILE"
         echo "  ✓ Index samtools créé"
     else
         echo "  ✓ Index samtools existant"
     fi
+    
+    # Stocker le génome préparé
+    FIXED_GENOMES[$GROUP]="$ORIGINAL_REF"
 done
 
 echo ""
 echo "Génomes préparés: ${#FIXED_GENOMES[@]}"
+echo ""
+
+# Afficher ce qui va être utilisé
+echo "Génomes qui seront utilisés pour le mapping :"
+for sp in "${!FIXED_GENOMES[@]}"; do
+    echo "  ✓ $sp → ${FIXED_GENOMES[$sp]}"
+done
+echo ""
 
 ################################################################################
-# MAPPINGS - UNMERGED READS
+# MAPPINGS - UNMERGED READS (PAIRED-END)
 ################################################################################
 
 shopt -s nullglob
 
 echo ""
 echo "=========================================="
-echo "ÉTAPE 8: Analyse UNMERGED READS - MapDamage"
+echo "ÉTAPE 8a: Analyse UNMERGED READS (Paired-End) - MapDamage"
 echo "=========================================="
 
 if [[ -d "$KRAKEN_UNMERGED" ]] && ls "$KRAKEN_UNMERGED"/*.kraken >/dev/null 2>&1; then
@@ -236,7 +275,7 @@ if [[ -d "$KRAKEN_UNMERGED" ]] && ls "$KRAKEN_UNMERGED"/*.kraken >/dev/null 2>&1
         echo "│ ${SAMPLE} (unmerged - $(ls -lh $R1 | awk '{print $5}') + $(ls -lh $R2 | awk '{print $5}'))"
         echo "└─────────────────────────────────────────"
         
-        for GROUP in "${!TAXONS[@]}"; do
+        for GROUP in "${!FIXED_GENOMES[@]}"; do
             REF="${FIXED_GENOMES[$GROUP]}"
             TAX_ID="${TAXONS[$GROUP]%:*}"
             
@@ -245,7 +284,7 @@ if [[ -d "$KRAKEN_UNMERGED" ]] && ls "$KRAKEN_UNMERGED"/*.kraken >/dev/null 2>&1
                 continue
             fi
             
-            OUTDIR="${DAMAGE_UNMERGED_BASE}/${GROUP}"
+            OUTDIR="${DAMAGE_UNMERGED_BASE}/${GROUP}/paired_end"
             mkdir -p "$OUTDIR"
             OUT_R1="${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R1.fastq"
             OUT_R2="${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R2.fastq"
@@ -297,11 +336,11 @@ if [[ -d "$KRAKEN_UNMERGED" ]] && ls "$KRAKEN_UNMERGED"/*.kraken >/dev/null 2>&1
             echo "    ✓ Mapping terminé"
             
             # Calculer taux de mapping
-            calculate_mapping_rate "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" "$SAMPLE" "$GROUP" "unmerged"
+            calculate_mapping_rate "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" "$SAMPLE" "$GROUP" "unmerged_PE"
             
-            # MapDamage
-            run_mapdamage_safe "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" "$REF" \
-                "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_mapDamage"
+            # MapDamage (paired-end : pas de distribution de longueurs)
+            run_mapdamage_with_length_dist "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" "$REF" \
+                "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_mapDamage" "paired"
             
             # Nettoyage (garder les BAM indexés pour futures analyses)
             rm -f "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R1.sai" \
@@ -312,6 +351,97 @@ if [[ -d "$KRAKEN_UNMERGED" ]] && ls "$KRAKEN_UNMERGED"/*.kraken >/dev/null 2>&1
 else
     echo "✗ ERREUR: Aucun fichier .kraken trouvé dans ${KRAKEN_UNMERGED}"
     exit 1
+fi
+
+################################################################################
+# ANALYSE SINGLE-END R1 UNIQUEMENT (POUR DISTRIBUTION DE LONGUEURS)
+################################################################################
+
+echo ""
+echo "=========================================="
+echo "ÉTAPE 8b: Analyse UNMERGED R1 (Single-End) - pour distributions de longueurs"
+echo "=========================================="
+
+if [[ -d "$KRAKEN_UNMERGED" ]] && ls "$KRAKEN_UNMERGED"/*.kraken >/dev/null 2>&1; then
+    for KRAKEN_FILE in "$KRAKEN_UNMERGED"/*.kraken; do
+        KRAKEN_BASE=$(basename "$KRAKEN_FILE" .kraken)
+        SAMPLE="${KRAKEN_BASE%_unmerged}"
+        R1="${FINAL_UNMERGED_DIR}/${SAMPLE}_final_unmerged_R1.fastq.gz"
+        
+        # Vérifier que le fichier existe et n'est pas vide
+        if [[ ! -f "$R1" || ! -s "$R1" ]]; then
+            continue
+        fi
+        
+        echo ""
+        echo "┌─────────────────────────────────────────"
+        echo "│ ${SAMPLE} (R1 only - $(ls -lh $R1 | awk '{print $5}'))"
+        echo "└─────────────────────────────────────────"
+        
+        for GROUP in "${!FIXED_GENOMES[@]}"; do
+            REF="${FIXED_GENOMES[$GROUP]}"
+            TAX_ID="${TAXONS[$GROUP]%:*}"
+            
+            if [[ -z "$REF" || ! -f "$REF" ]]; then
+                continue
+            fi
+            
+            OUTDIR="${DAMAGE_UNMERGED_BASE}/${GROUP}/single_end_R1"
+            mkdir -p "$OUTDIR"
+            OUT_R1="${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R1.fastq"
+            
+            echo ""
+            echo "  → ${GROUP} (Single-end R1)"
+            echo "    Extraction R1 uniquement..."
+            
+            # Extraire R1 uniquement
+            python3 "${KRAKENTOOLS_DIR}/extract_kraken_reads.py" \
+                -k "$KRAKEN_FILE" \
+                -s "$R1" \
+                -t "$TAX_ID" \
+                -o "$OUT_R1" \
+                --fastq-output 2>>"$LOGFILE"
+            
+            if [[ ! -f "$OUT_R1" || ! -s "$OUT_R1" ]]; then
+                echo "    ⚠ Aucun read extrait pour ${GROUP}"
+                rm -f "$OUT_R1" 2>/dev/null
+                continue
+            fi
+            
+            READ_COUNT=$(grep -c "^@" "$OUT_R1" 2>/dev/null || echo 0)
+            echo "    ✓ ${READ_COUNT} reads extraits"
+            
+            # Mapping BWA single-end
+            echo "    Mapping BWA single-end..."
+            
+            bwa aln -n 0.08 -l 24 -k 2 -q 20 -t 4 "$REF" "$OUT_R1" \
+                > "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R1.sai" 2>>"$LOGFILE"
+            
+            bwa samse "$REF" \
+                "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R1.sai" \
+                "$OUT_R1" 2>>"$LOGFILE" | \
+                samtools view -bS - 2>>"$LOGFILE" | \
+                samtools sort -o "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" - 2>>"$LOGFILE"
+            
+            if [[ ! -f "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" ]]; then
+                echo "    ✗ Erreur lors du mapping"
+                continue
+            fi
+            
+            samtools index "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" 2>>"$LOGFILE"
+            echo "    ✓ Mapping terminé"
+            
+            # Calculer taux de mapping
+            calculate_mapping_rate "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" "$SAMPLE" "$GROUP" "unmerged_SE_R1"
+            
+            # MapDamage (single-end : AVEC distribution de longueurs !)
+            run_mapdamage_with_length_dist "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" "$REF" \
+                "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_mapDamage" "single"
+            
+            # Nettoyage
+            rm -f "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R1.sai" "$OUT_R1"
+        done
+    done
 fi
 
 shopt -u nullglob
@@ -328,7 +458,9 @@ echo "=========================================="
 echo ""
 echo "📊 Statistiques de mapping: $MAPPING_INFO"
 echo "📝 Log complet: $LOGFILE"
-echo "📁 Fichiers BAM + MapDamage: $DAMAGE_UNMERGED_BASE"
+echo "📁 Fichiers BAM + MapDamage:"
+echo "    - Paired-end: $DAMAGE_UNMERGED_BASE/*/paired_end/"
+echo "    - Single-end R1: $DAMAGE_UNMERGED_BASE/*/single_end_R1/"
 echo ""
 
 # Afficher un aperçu des résultats
@@ -349,4 +481,3 @@ echo "Pipeline MapDamage terminé le $(date +%Y-%m-%d\ %H:%M:%S). Résultats: $D
     mail -s "Pipeline Coprolites MapDamage - Terminé" pierrelouis.stenger@gmail.com 2>/dev/null || true
 
 exit 0
-
