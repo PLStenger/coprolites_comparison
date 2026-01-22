@@ -97,23 +97,48 @@ echo -e "Sample\tSpecies\tType\tTotal_Reads\tMapped_Reads\tMapping_Rate(%)" > "$
 # Chaque entrée : TAXONS["nom_espece"]="taxid:/chemin/vers/genome.fasta"
 
 declare -A TAXONS=(
-    # === Espèces testées et fonctionnelles (historique) ===
-    # ["Ovis_aries"]="9940:/home/plstenge/genomes/Ovis_aries/Ovis_aries.ARS-UI_Ramb_v3.0.dna.toplevel.fa"
-    # ["Capra_hircus"]="9925:/home/plstenge/genomes/Capra_hircus/Capra_hircus.ARS1.dna.toplevel.fa"
-    # ["Corylus_avellana"]="13451:/home/plstenge/genomes/Corylus_avellana/Corylus_avellana_CavTom2PMs_1_0.fasta"
-    # ["Alnus_glutinosa"]="3517:/home/plstenge/genomes/Alnus_glutinosa/Alnus_glutinosa_genome_assembly_dhAlnGlut1.fa"
-    # ["Dryopteris"]="3287:/home/plstenge/genomes/Dryopteris_crassirhizoma/Dryopteris_crassirhizoma_mitochondrion.fna"
-    
-    # === Espèces en debug ===
-    ["Bos_taurus"]="9903:/home/plstenge/genomes/Bos_taurus/GCF_002263795.3_ARS-UCD2.0_genomic.fna"
-    ["Phragmites_australis"]="29695:/home/plstenge/genomes/Phragmites_australis/Phragmites_australis_GCA_040373225.1.uniq.fa"
-    
-    # === Espèces à ajouter ===
-    ["Populus"]="3689:/home/plstenge/genomes/Populus_nigra/CATOPT01.fasta"
-    ["Trifolium"]="3334059:/home/plstenge/genomes/Trifolium_pratense/FKJA01.fasta"
-    ["Malus"]="3749:/home/plstenge/genomes/Malus_domestica/GCF_042453785.1_GDT2T_hap1_genomic.fna"
-    ["Quercus"]="3511:/home/plstenge/genomes/Quercus_robur/Qrob_PM1N.fa"
-    ["Daucus_carota"]="4039:/home/plstenge/genomes/Daucus_carota/LNRQ01.fasta"
+["Mus_musculus"]="10090:/home/plstenge/genomes/Mus_musculus/Mus_musculus.GRCm39.dna.toplevel.fa"
+["Prunus_dulcis"]="3755:/home/plstenge/genomes/Prunus_dulcis/CABIKO01.fasta"
+["Olea_europaea"]="4146:/home/plstenge/genomes/Olea_europaea/CACTIH01.fasta"
+["Ligustrum_vulgare"]="13597:/home/plstenge/genomes/Ligustrum_vulgare/GCA_963555705.1_daLigVulg1.1_genomic.fna"
+["Salix_caprea"]="40685:/home/plstenge/genomes/Salix_caprea/GCA_964035475.1_ddSalCapr1.1_genomic.fna"
+["Vitis_vinifera"]="29760:/storage/groups/gdec/shared_paleo/genomes_REF/12Xv2_grapevine_genome_assembly.fa"
+["Homo_sapiens"]="9606:/home/plstenge/genomes/Homo_sapiens/GCF_000001405.40_GRCh38.p14_genomic.fna"
+["Cannabis_sativa"]="3483:/home/plstenge/genomes/Cannabis_sativa/GCF_029168945.1_ASM2916894v1_genomic.fna"
+["Brachypodium_distachyon"]="15367:/home/plstenge/genomes/Brachypodium_distachyon/GCF_000005505.3_Brachypodium_distachyon_v3.0_genomic.fna"
+["Lotus_japonicus"]="34305:/home/plstenge/genomes/Lotus_japonicus/GCF_012489685.1_LjGifu_v1.2_genomic.fna"
+["Rubus_caesius"]="75065:/home/plstenge/genomes/Rubus_caesius/GCA_964235055.1_drRubCaes1.hap1.1_genomic.fna"
+["Mentha_longifolia"]="21819:/home/plstenge/genomes/Mentha_longifolia/GCA_052575335.1_ASM5257533v1_genomic.fna"
+["Brassica_oleracea"]="3712:/home/plstenge/genomes/Brassica_oleracea/GCF_000695525.1_BOL_genomic.fna"
+["Leontodon_hispidus"]="58660:/home/plstenge/genomes/Leontodon_hispidus/GCA_965240285.1_daLeoHisp1.hap1.1_genomic.fna"
+["Rosa_rugosa"]="74645:/home/plstenge/genomes/Rosa_rugosa/GCF_958449725.1_drRosRugo1.1_genomic.fna"
+["Fragaria_vesca"]="57918:/home/plstenge/genomes/Fragaria_vesca/GCF_000184155.1_FraVesHawaii_1.0_genomic.fna"
+["Humulus_lupulus"]="3486:/home/plstenge/genomes/Humulus_lupulus/GCF_963169125.1_drHumLupu1.1_genomic.fna"
+["Rosa_chinensis"]="74649:/home/plstenge/genomes/Rosa_chinensis/GCF_002994745.2_RchiOBHm-V2_genomic.fna"
+["Plantago_lanceolata"]="26867:/home/plstenge/genomes/Plantago_lanceolata/GCA_028659135.1_PL_genome_S119_genomic.fna"
+["Pinus_sylvestris"]="3337:/home/plstenge/genomes/Pinus_sylvestris/GCA_900143225.1_FinPunk_mtDNA_Assembly_genomic.fna"
+["Lolium_perenne"]="4522:/home/plstenge/genomes/Lolium_perenne/GCF_019359855.2_Kyuss_2.0_genomic.fna"
+["Triticum_timopheevii"]="4564:/storage/groups/gdec/shared_paleo/genomes_REF/TrTimopheevii.pseudomol-v0.3_genome.fa"
+["Triticum_spelta"]="4564:/storage/groups/gdec/shared_paleo/genomes_REF/Triticum_spelta.PGSBv2.genomeABS.fa"
+["Triticum_Svevo"]="4564:/storage/groups/gdec/shared_paleo/genomes_REF/160802_Svevo_v2_pseudomolecules.fasta"
+["Medicago_truncatula"]="880:/home/plstenge/genomes/Medicago_truncatula/GCF_003473485.1_MtrunA17r5.0-ANR_genomic.fna"
+["Calluna_vulgaris"]="13385:/home/plstenge/genomes/Calluna_vulgaris/GCA_964145215.1_ddCalVulg4.hap2.1_genomic.fna"
+["Ericales_Calluna"]="41945:/home/plstenge/genomes/Calluna_vulgaris/GCA_964145215.1_ddCalVulg4.hap2.1_genomic.fna"
+["Populus_trichocarpa"]="3689:/home/plstenge/genomes/Populus_trichocarpa/GCF_000002775.5_P.trichocarpa_v4.1_genomic.fna"
+["Prunella_vulgaris"]="39358:/home/plstenge/genomes/Prunella_vulgaris/GCA_044905855.1_ASM4490585v1_genomic.fna"
+["Fraxinus_excelsior"]="38873:/home/plstenge/genomes/Fraxinus_excelsior/GCA_965226085.2_daFraExce3.hap1.2_genomic.fna"
+["Ovis_aries"]="9940:/home/plstenge/genomes/Ovis_aries/Ovis_aries.ARS-UI_Ramb_v3.0.dna.toplevel.fa"
+["Capra_hircus"]="9925:/home/plstenge/genomes/Capra_hircus/Capra_hircus.ARS1.dna.toplevel.fa"
+["Corylus_avellana"]="13451:/home/plstenge/genomes/Corylus_avellana/Corylus_avellana_CavTom2PMs_1_0.fasta"
+["Alnus_glutinosa"]="3517:/home/plstenge/genomes/Alnus_glutinosa/Alnus_glutinosa_genome_assembly_dhAlnGlut1.fa"
+["Dryopteris_crassirhizoma"]="3287:/home/plstenge/genomes/Dryopteris_crassirhizoma/Dryopteris_crassirhizoma_mitochondrion.fna"
+["Bos_taurus"]="9903:/home/plstenge/genomes/Bos_taurus/GCF_002263795.3_ARS-UCD2.0_genomic.fna"
+["Phragmites_australis"]="29695:/home/plstenge/genomes/Phragmites_australis/Phragmites_australis_GCA_040373225.1.uniq.fa"
+["Populus_nigra"]="3689:/home/plstenge/genomes/Populus_nigra/CATOPT01.fasta"
+["Trifolium_pratense"]="3334059:/home/plstenge/genomes/Trifolium_pratense/FKJA01.fasta"
+["Malus_domestica"]="3749:/home/plstenge/genomes/Malus_domestica/GCF_042453785.1_GDT2T_hap1_genomic.fna"
+["Quercus_robur"]="3511:/home/plstenge/genomes/Quercus_robur/Qrob_PM1N.fa"
+["Daucus_carota"]="4039:/home/plstenge/genomes/Daucus_carota/LNRQ01.fasta"
 )
 
 echo ""
@@ -177,84 +202,115 @@ run_mapdamage_with_length_dist() {
     fi
 }
 
+check_bwa_index_complete() {
+    local ref="$1"
+    
+    if [[ -f "${ref}.bwt" ]] && \
+       [[ -f "${ref}.amb" ]] && \
+       [[ -f "${ref}.ann" ]] && \
+       [[ -f "${ref}.pac" ]] && \
+       [[ -f "${ref}.sa" ]]; then
+        return 0  # Complet
+    fi
+    return 1  # Incomplet
+}
+
 ################################################################################
-# INDEXATION DES GÉNOMES (VERSION SIMPLIFIÉE - SANS .fixed.fa)
+# PHASE 1 : INDEXATION PRÉALABLE DES GÉNOMES
 ################################################################################
 
 echo ""
 echo "=========================================="
-echo "Préparation des génomes de référence"
+echo "PHASE 1: Préparation et indexation des génomes de référence"
 echo "=========================================="
+echo ""
 
-declare -A FIXED_GENOMES
+declare -A VALID_GENOMES
+INDEXATION_ERRORS=0
 
 for GROUP in "${!TAXONS[@]}"; do
     ORIGINAL_REF="${TAXONS[$GROUP]#*:}"
     
-    echo ""
-    echo "→ ${GROUP}"
+    echo -n "→ ${GROUP}: "
     
     # Vérifier que le FASTA existe
     if [[ ! -f "$ORIGINAL_REF" ]]; then
-        echo "  ✗ Génome non trouvé: $ORIGINAL_REF"
+        echo "✗ Génome FASTA non trouvé: $ORIGINAL_REF"
+        ((INDEXATION_ERRORS++))
         continue
     fi
     
-    echo "  Source: $(du -h "$ORIGINAL_REF" | cut -f1)"
+    GENOME_SIZE=$(du -h "$ORIGINAL_REF" | cut -f1)
+    echo -n "($GENOME_SIZE) ... "
     
     # ====== INDEX BWA ======
-    if [[ ! -f "${ORIGINAL_REF}.bwt" ]]; then
-        echo "  → Indexation BWA (peut prendre 10-60 min pour gros génomes)..."
-        bwa index "$ORIGINAL_REF" 2>>"$LOGFILE"
-        
-        # Vérifier que l'index est complet
-        if [[ -f "${ORIGINAL_REF}.bwt" ]] && \
-           [[ -f "${ORIGINAL_REF}.amb" ]] && \
-           [[ -f "${ORIGINAL_REF}.ann" ]] && \
-           [[ -f "${ORIGINAL_REF}.pac" ]] && \
-           [[ -f "${ORIGINAL_REF}.sa" ]]; then
-            echo "  ✓ Index BWA créé (complet)"
+    if check_bwa_index_complete "$ORIGINAL_REF"; then
+        echo -n "[BWA:✓] "
+    else
+        echo -n "[BWA:⏳ indexation] "
+        if timeout 3600 bwa index "$ORIGINAL_REF" 2>>"$LOGFILE"; then
+            if check_bwa_index_complete "$ORIGINAL_REF"; then
+                echo -n "[✓] "
+            else
+                echo "✗ [ERREUR: Index BWA incomplet après indexation]"
+                ((INDEXATION_ERRORS++))
+                continue
+            fi
         else
-            echo "  ✗ Index BWA incomplet - on skippe ${GROUP}"
+            echo "✗ [ERREUR: BWA index timeout ou erreur]"
+            ((INDEXATION_ERRORS++))
             continue
         fi
-    else
-        echo "  ✓ Index BWA existant"
     fi
     
     # ====== INDEX SAMTOOLS ======
     if [[ ! -f "${ORIGINAL_REF}.fai" ]]; then
-        samtools faidx "$ORIGINAL_REF" 2>>"$LOGFILE"
-        echo "  ✓ Index samtools créé"
+        echo -n "[SAM:⏳] "
+        if samtools faidx "$ORIGINAL_REF" 2>>"$LOGFILE"; then
+            echo "[✓]"
+        else
+            echo "✗ [ERREUR: samtools faidx échoué]"
+            ((INDEXATION_ERRORS++))
+            continue
+        fi
     else
-        echo "  ✓ Index samtools existant"
+        echo "[SAM:✓]"
     fi
     
-    # Stocker le génome préparé
-    FIXED_GENOMES[$GROUP]="$ORIGINAL_REF"
+    # Stocker le génome comme valide
+    VALID_GENOMES[$GROUP]="$ORIGINAL_REF"
 done
 
 echo ""
-echo "Génomes préparés: ${#FIXED_GENOMES[@]}"
-echo ""
+if [[ $INDEXATION_ERRORS -gt 0 ]]; then
+    echo "⚠ WARNING: $INDEXATION_ERRORS génomes ont échoué l'indexation"
+fi
 
-# Afficher ce qui va être utilisé
-echo "Génomes qui seront utilisés pour le mapping :"
-for sp in "${!FIXED_GENOMES[@]}"; do
-    echo "  ✓ $sp → ${FIXED_GENOMES[$sp]}"
+echo "✓ Génomes prêts pour le mapping: ${#VALID_GENOMES[@]}"
+
+if [[ ${#VALID_GENOMES[@]} -eq 0 ]]; then
+    echo "✗ ERREUR CRITIQUE: Aucun génome valide disponible!"
+    exit 1
+fi
+
+echo ""
+echo "Génomes valides pour la suite :"
+for sp in "${!VALID_GENOMES[@]}"; do
+    echo "  ✓ $sp"
 done
 echo ""
 
 ################################################################################
-# MAPPINGS - UNMERGED READS (PAIRED-END)
+# PHASE 2 : MAPPINGS - UNMERGED READS (PAIRED-END)
 ################################################################################
 
 shopt -s nullglob
 
 echo ""
 echo "=========================================="
-echo "ÉTAPE 8a: Analyse UNMERGED READS (Paired-End) - MapDamage"
+echo "PHASE 2: Analyse UNMERGED READS (Paired-End) - MapDamage"
 echo "=========================================="
+echo ""
 
 if [[ -d "$KRAKEN_UNMERGED" ]] && ls "$KRAKEN_UNMERGED"/*.kraken >/dev/null 2>&1; then
     for KRAKEN_FILE in "$KRAKEN_UNMERGED"/*.kraken; do
@@ -275,8 +331,8 @@ if [[ -d "$KRAKEN_UNMERGED" ]] && ls "$KRAKEN_UNMERGED"/*.kraken >/dev/null 2>&1
         echo "│ ${SAMPLE} (unmerged - $(ls -lh $R1 | awk '{print $5}') + $(ls -lh $R2 | awk '{print $5}'))"
         echo "└─────────────────────────────────────────"
         
-        for GROUP in "${!FIXED_GENOMES[@]}"; do
-            REF="${FIXED_GENOMES[$GROUP]}"
+        for GROUP in "${!VALID_GENOMES[@]}"; do
+            REF="${VALID_GENOMES[$GROUP]}"
             TAX_ID="${TAXONS[$GROUP]%:*}"
             
             if [[ -z "$REF" || ! -f "$REF" ]]; then
@@ -354,13 +410,14 @@ else
 fi
 
 ################################################################################
-# ANALYSE SINGLE-END R1 UNIQUEMENT (POUR DISTRIBUTION DE LONGUEURS)
+# PHASE 3 : ANALYSE SINGLE-END R1 UNIQUEMENT (POUR DISTRIBUTION DE LONGUEURS)
 ################################################################################
 
 echo ""
 echo "=========================================="
-echo "ÉTAPE 8b: Analyse UNMERGED R1 (Single-End) - pour distributions de longueurs"
+echo "PHASE 3: Analyse UNMERGED R1 (Single-End) - pour distributions de longueurs"
 echo "=========================================="
+echo ""
 
 if [[ -d "$KRAKEN_UNMERGED" ]] && ls "$KRAKEN_UNMERGED"/*.kraken >/dev/null 2>&1; then
     for KRAKEN_FILE in "$KRAKEN_UNMERGED"/*.kraken; do
@@ -378,8 +435,8 @@ if [[ -d "$KRAKEN_UNMERGED" ]] && ls "$KRAKEN_UNMERGED"/*.kraken >/dev/null 2>&1
         echo "│ ${SAMPLE} (R1 only - $(ls -lh $R1 | awk '{print $5}'))"
         echo "└─────────────────────────────────────────"
         
-        for GROUP in "${!FIXED_GENOMES[@]}"; do
-            REF="${FIXED_GENOMES[$GROUP]}"
+        for GROUP in "${!VALID_GENOMES[@]}"; do
+            REF="${VALID_GENOMES[$GROUP]}"
             TAX_ID="${TAXONS[$GROUP]%:*}"
             
             if [[ -z "$REF" || ! -f "$REF" ]]; then
