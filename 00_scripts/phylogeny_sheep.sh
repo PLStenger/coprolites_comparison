@@ -33,7 +33,7 @@ echo ""
 echo "Initialisation des environnements conda..."
 
 module load conda/4.12.0
-source ~/.bashrc
+#source ~/.bashrc
 
 # Créer environnement s'il n'existe pas
 if ! conda env list | grep -q "phylogeny_env"; then
