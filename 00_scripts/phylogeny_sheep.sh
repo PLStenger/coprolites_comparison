@@ -19,7 +19,6 @@
 #SBATCH --error="/home/plstenge/coprolites_comparison/00_scripts/phylogeny_identification.err"
 #SBATCH --output="/home/plstenge/coprolites_comparison/00_scripts/phylogeny_identification.out"
 
-set -euo pipefail
 
 echo ""
 echo "=========================================="
@@ -33,7 +32,7 @@ echo ""
 echo "Initialisation des environnements conda..."
 
 module load conda/4.12.0
-#source ~/.bashrc
+source ~/.bashrc
 
 # Créer environnement s'il n'existe pas
 if ! conda env list | grep -q "phylogeny_env"; then
