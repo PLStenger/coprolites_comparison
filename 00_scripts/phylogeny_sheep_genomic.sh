@@ -9,6 +9,11 @@
 #SBATCH --error="/home/plstenge/coprolites_comparison/00_scripts/phylogeny_identification_genomic.err"
 #SBATCH --output="/home/plstenge/coprolites_comparison/00_scripts/phylogeny_identification_genomic.out"
 
+# ========== INITIALISATION CONDA POUR SLURM ==========
+echo "Initialisation de conda..."
+module load conda/4.12.0
+source ~/.bashrc
+conda activate genomics_analysis
 
 # ========== CONFIG ==========
 BAM_DIR="/home/plstenge/coprolites_comparison/11_map_to_sheep_genome"
