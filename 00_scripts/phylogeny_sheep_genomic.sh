@@ -64,8 +64,8 @@ echo "ÉTAPE 3: Download modern reference genomes"
 # Télécharger VCF moutons modernes (ex: 1000 Sheep Genomes Project)
 # http://www.sheephapmap.org/
 
-wget -O ${OUT_DIR}/02_merge/modern_sheep_1000genomes.vcf.gz \
-    "http://www.sheephapmap.org/download/..."  # URL réelle
+scp -r /home/plstenge/coprolites_comparison/15_modern_sheep_vcf/ISGC_SNP50_Breedv2.vcf.gz ${OUT_DIR}/02_merge/ 
+mv ${OUT_DIR}/02_merge/ISGC_SNP50_Breedv2.vcf.gz ${OUT_DIR}/02_merge/modern_sheep_1000genomes.vcf.gz 
 
 # ========== ÉTAPE 4 : Merge ancien + moderne ==========
 echo "ÉTAPE 4: Merge ancient + modern"
