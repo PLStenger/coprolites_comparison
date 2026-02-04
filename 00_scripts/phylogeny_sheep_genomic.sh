@@ -1,15 +1,15 @@
 #!/bin/bash
 
-#SBATCH --job-name=phylogeny_ancient_modern_genomes
+#SBATCH --job-name=phylogeny_FULLGENOME
 #SBATCH --ntasks=16
 #SBATCH --cpus-per-task=1
 #SBATCH -p smp
 #SBATCH --mem=250G
-#SBATCH --time=48:00:00
+#SBATCH --time=72:00:00
 #SBATCH --mail-user=pierrelouis.stenger@gmail.com
 #SBATCH --mail-type=ALL
-#SBATCH --error="/home/plstenge/coprolites_comparison/00_scripts/phylogeny_genomes.err"
-#SBATCH --output="/home/plstenge/coprolites_comparison/00_scripts/phylogeny_genomes.out"
+#SBATCH --error="/home/plstenge/coprolites_comparison/00_scripts/phylogeny_genomes_FULLGENOME.err"
+#SBATCH --output="/home/plstenge/coprolites_comparison/00_scripts/phylogeny_genomes_FULLGENOME.out"
 
 # ========== INITIALISATION ==========
 echo "Initialisation..."
@@ -27,7 +27,7 @@ done
 ANCIENT_BAM_DIR="/home/plstenge/coprolites_comparison/12_mapdamage/unmerged_reads/Ovis_aries/paired_end"
 MODERN_GENOMES_DIR="/home/plstenge/coprolites_comparison/16_genomes"
 REF="/home/plstenge/genomes/Ovis_aries/Ovis_aries.ARS-UI_Ramb_v3.0.dna.toplevel.fa"
-OUT_DIR="/home/plstenge/coprolites_comparison/14_nuclear_genome_analysis/11_complete_phylogeny"
+OUT_DIR="/home/plstenge/coprolites_comparison/14_nuclear_genome_analysis/12_complete_phylogeny_FULLGENOME"
 
 ANCIENT_SAMPLES=(cop408 cop410 cop412 cop414)
 
@@ -42,7 +42,6 @@ declare -A MODERN_GENOMES=(
     ["Kermani"]="Ovis_aries_Kermani_breed/GCA_022432835.1_ASM2243283v1_genomic.fna.gz"
     ["Mouflon"]="Ovis_aries_musimon/GCF_000765115.1_Oori1_genomic.fna.gz"
     ["Polled_Dorset"]="Ovis_aries_Polled_Dorset_breed/GCA_022416915.1_ASM2241691v1_genomic.fna.gz"
-    ["Rambouillet"]="Ovis_aries_Rambouillet_breed/GCF_016772045.2_ARS-UI_Ramb_v3.0_genomic.fna.gz"
     ["Bighorn"]="Ovis_canadensis/GCF_042477335.2_ARS-UI_OviCan_v2_genomic.fna.gz"
     ["Snow_Sheep"]="Ovis_nivicola_lydekkeri/GCA_903231385.1_OvNiv1.0_genomic.fna.gz"
     ["Orientalis"]="Ovis_orientalis_from_Iran_PRJEB3141/GCF_000765115.1_Oori1_genomic.fna.gz"
@@ -54,10 +53,12 @@ THREADS=16
 mkdir -p $OUT_DIR/{01_indexed_genomes,02_consensus,03_vcf,04_merged,05_analysis}
 
 echo "=========================================="
-echo "PHYLOGÉNIE COMPLÈTE"
+echo "PHYLOGÉNIE GÉNOME ENTIER"
 echo "=========================================="
 echo "Anciens: 4 coprolites"
 echo "Modernes: ${#MODERN_GENOMES[@]} génomes de référence"
+echo "⚠️  GÉNOME COMPLET (pas seulement chr1)"
+echo "   Temps estimé: 12-24h"
 echo "=========================================="
 
 # ========== ÉTAPE 1 : Index des génomes modernes ==========
@@ -71,9 +72,14 @@ if [[ ! -f "${REF}.bwt" ]]; then
     bwa index $REF
 fi
 
+if [[ ! -f "${REF}.fai" ]]; then
+    echo "  Indexation FASTA..."
+    samtools faidx $REF
+fi
+
 # ========== ÉTAPE 2 : Générer séquences consensus pour modernes ==========
 echo ""
-echo "ÉTAPE 2: Génération des consensus modernes"
+echo "ÉTAPE 2: Génération des consensus modernes (GÉNOME ENTIER)"
 echo "----------------------------------------"
 echo "  Stratégie: Pseudogénomes basés sur alignement vs référence commune"
 
@@ -86,24 +92,23 @@ for NAME in "${!MODERN_GENOMES[@]}"; do
         continue
     fi
     
-    echo "  $NAME: extraction chromosome 1 (représentatif)..."
+    echo "  $NAME: extraction génome complet..."
     
-    # Pour comparaison rapide: extraire CHR1 uniquement
-    # (génome entier prendrait trop de temps/RAM)
+    # Extraire les 10 premiers scaffolds/chromosomes principaux (éviter milliers de contigs)
     zcat $GENOME_PATH | \
-    awk '/^>/{if(NR>1) exit; print ">'"$NAME"'"; next} {print}' | \
-    head -100000 | \
+    awk '/^>/{n++; if(n>10) exit} {print}' | \
+    sed "s/^>.*/>${NAME}/" | \
     gzip > $CONSENSUS
     
-    echo "    → Consensus CHR1 créé"
+    SIZE=$(zcat $CONSENSUS | grep -v "^>" | wc -c)
+    echo "    → Consensus créé ($SIZE bp)"
 done
 
-echo "  ⚠️  Note: Utilisation du chromosome 1 uniquement pour accélérer"
-echo "     Pour analyse complète, utiliser génomes entiers (temps ++)"
+echo "  ✓ Note: Top 10 scaffolds par génome (représentatif, évite contigs courts)"
 
-# ========== ÉTAPE 3 : SNP calling sur échantillons anciens ==========
+# ========== ÉTAPE 3 : SNP calling sur échantillons anciens (GÉNOME ENTIER) ==========
 echo ""
-echo "ÉTAPE 3: SNP calling échantillons anciens"
+echo "ÉTAPE 3: SNP calling échantillons anciens (GÉNOME ENTIER)"
 echo "----------------------------------------"
 
 for SAMPLE in "${ANCIENT_SAMPLES[@]}"; do
@@ -117,11 +122,11 @@ for SAMPLE in "${ANCIENT_SAMPLES[@]}"; do
     
     echo "  $SAMPLE..."
     
+    # Pas de filtre -r (tous les chromosomes)
     bcftools mpileup \
         -f $REF \
         -Q 20 -q 20 -A \
         --max-depth 1000000 \
-        -r 1 \
         $BAM | \
     bcftools call -m -v --ploidy 2 | \
     bcftools reheader -s <(echo "$SAMPLE") | \
@@ -130,12 +135,12 @@ for SAMPLE in "${ANCIENT_SAMPLES[@]}"; do
     bcftools index -f $VCF
     
     N=$(bcftools view -H $VCF | wc -l)
-    echo "    → $N SNPs (chromosome 1)"
+    echo "    → $N SNPs (génome entier)"
 done
 
-# ========== ÉTAPE 4 : Appeler variants sur consensus modernes ==========
+# ========== ÉTAPE 4 : Appeler variants sur consensus modernes (GÉNOME ENTIER) ==========
 echo ""
-echo "ÉTAPE 4: Extraction variants depuis consensus modernes"
+echo "ÉTAPE 4: Extraction variants depuis consensus modernes (GÉNOME ENTIER)"
 echo "----------------------------------------"
 
 for NAME in "${!MODERN_GENOMES[@]}"; do
@@ -153,13 +158,13 @@ for NAME in "${!MODERN_GENOMES[@]}"; do
     TMP_BAM="${OUT_DIR}/03_vcf/${NAME}_tmp.bam"
     
     zcat $CONSENSUS | \
-    bwa mem -t 4 $REF - | \
+    bwa mem -t $THREADS $REF - | \
     samtools sort -@ 4 -o $TMP_BAM
     
     samtools index $TMP_BAM
     
-    # Calling
-    bcftools mpileup -f $REF -r 1 --max-depth 500 $TMP_BAM | \
+    # Calling (pas de filtre -r, tous chromosomes)
+    bcftools mpileup -f $REF --max-depth 500 $TMP_BAM | \
     bcftools call -m -v --ploidy 2 | \
     bcftools reheader -s <(echo "$NAME") | \
     bcftools view -Oz -o $VCF
@@ -169,7 +174,7 @@ for NAME in "${!MODERN_GENOMES[@]}"; do
     rm -f $TMP_BAM $TMP_BAM.bai
     
     N=$(bcftools view -H $VCF | wc -l)
-    echo "    → $N SNPs"
+    echo "    → $N SNPs (génome entier)"
 done
 
 # ========== ÉTAPE 5 : Merge tous les VCFs ==========
@@ -192,7 +197,7 @@ bcftools merge $ALL_VCFS -Oz -o ${OUT_DIR}/04_merged/all_samples_raw.vcf.gz
 bcftools index -f ${OUT_DIR}/04_merged/all_samples_raw.vcf.gz
 
 N_RAW=$(bcftools view -H ${OUT_DIR}/04_merged/all_samples_raw.vcf.gz | wc -l)
-echo "  → $N_RAW SNPs bruts"
+echo "  → $N_RAW SNPs bruts (génome entier)"
 
 # Filtrage
 echo "  Filtrage (QUAL>20, missing<50%)..."
@@ -208,7 +213,7 @@ bcftools index -f ${OUT_DIR}/04_merged/all_samples_filtered.vcf.gz
 N_FILT=$(bcftools view -H ${OUT_DIR}/04_merged/all_samples_filtered.vcf.gz | wc -l)
 echo "  ✓ $N_FILT SNPs filtrés"
 
-if [[ $N_FILT -lt 100 ]]; then
+if [[ $N_FILT -lt 500 ]]; then
     echo "  ⚠️  Peu de SNPs détectés, relaxation des filtres..."
     
     bcftools view \
@@ -237,33 +242,95 @@ plink --vcf ${OUT_DIR}/04_merged/all_samples_filtered.vcf.gz \
 N_SNPS_PLINK=$(wc -l < ${OUT_DIR}/05_analysis/all_samples.bim)
 echo "  ✓ $N_SNPS_PLINK SNPs dans PLINK"
 
-# ========== ÉTAPE 7 : PCA ==========
+# ========== ÉTAPE 7 : Statistiques missing data ==========
 echo ""
-echo "ÉTAPE 7: PCA"
+echo "ÉTAPE 7: Statistiques missing data"
 echo "----------------------------------------"
 
 plink --bfile ${OUT_DIR}/05_analysis/all_samples \
+      --missing \
+      --allow-extra-chr \
+      --out ${OUT_DIR}/05_analysis/missing_stats
+
+echo "  Missing data par échantillon (top 10):"
+awk 'NR>1 {print $2, $6}' ${OUT_DIR}/05_analysis/missing_stats.imiss | \
+    sort -k2 -rn | head -10 | \
+    awk '{printf "    %s: %.2f%%\n", $1, $2*100}'
+
+# Filtrer échantillons avec données suffisantes
+awk '$6 < 0.5 {print $1, $2}' ${OUT_DIR}/05_analysis/missing_stats.imiss > \
+    ${OUT_DIR}/05_analysis/samples_ok.txt
+
+N_OK=$(wc -l < ${OUT_DIR}/05_analysis/samples_ok.txt)
+echo "  → $N_OK échantillons avec <50% missing"
+
+if [[ $N_OK -ge 5 ]]; then
+    echo "  Création dataset filtré..."
+    
+    plink --bfile ${OUT_DIR}/05_analysis/all_samples \
+          --keep ${OUT_DIR}/05_analysis/samples_ok.txt \
+          --geno 0.3 \
+          --maf 0.01 \
+          --make-bed \
+          --allow-extra-chr \
+          --out ${OUT_DIR}/05_analysis/filtered
+    
+    DATASET="${OUT_DIR}/05_analysis/filtered"
+else
+    echo "  ⚠️  Peu d'échantillons OK, utilisation dataset complet"
+    DATASET="${OUT_DIR}/05_analysis/all_samples"
+fi
+
+# ========== ÉTAPE 8 : PCA ==========
+echo ""
+echo "ÉTAPE 8: PCA"
+echo "----------------------------------------"
+
+plink --bfile $DATASET \
       --pca 10 \
       --allow-extra-chr \
       --out ${OUT_DIR}/05_analysis/pca
 
-echo "  ✓ PCA terminée"
+if [[ -f "${OUT_DIR}/05_analysis/pca.eigenvec" ]]; then
+    echo "  ✓ PCA terminée"
+    echo "  Échantillons dans PCA: $(wc -l < ${OUT_DIR}/05_analysis/pca.eigenvec)"
+else
+    echo "  ✗ PCA échouée, voir pca.log"
+fi
 
-# ========== ÉTAPE 8 : Distance génétique ==========
+# ========== ÉTAPE 9 : Distance génétique ==========
 echo ""
-echo "ÉTAPE 8: Distances génétiques"
+echo "ÉTAPE 9: Distances génétiques"
 echo "----------------------------------------"
 
-plink --bfile ${OUT_DIR}/05_analysis/all_samples \
-      --distance square \
+plink --bfile $DATASET \
+      --distance square 1-ibs \
       --allow-extra-chr \
       --out ${OUT_DIR}/05_analysis/distances
 
 echo "  ✓ Matrice de distances calculée"
 
-# ========== ÉTAPE 9 : ADMIXTURE ==========
+# ========== ÉTAPE 10 : Distances avec TOUS les échantillons (même missing) ==========
 echo ""
-echo "ÉTAPE 9: ADMIXTURE"
+echo "ÉTAPE 10: Distances complètes (tous échantillons, dataset relax)"
+echo "----------------------------------------"
+
+plink --bfile ${OUT_DIR}/05_analysis/all_samples \
+      --geno 0.95 \
+      --make-bed \
+      --allow-extra-chr \
+      --out ${OUT_DIR}/05_analysis/all_relaxed
+
+plink --bfile ${OUT_DIR}/05_analysis/all_relaxed \
+      --distance square 1-ibs \
+      --allow-extra-chr \
+      --out ${OUT_DIR}/05_analysis/distances_all
+
+echo "  ✓ Matrice de distances complète (anciens inclus)"
+
+# ========== ÉTAPE 11 : ADMIXTURE ==========
+echo ""
+echo "ÉTAPE 11: ADMIXTURE"
 echo "----------------------------------------"
 
 which admixture > /dev/null 2>&1
@@ -274,7 +341,7 @@ else
     
     for K in {2..10}; do
         echo "  K=$K..."
-        admixture --cv all_samples.bed $K -j8 > admixture_K${K}.log 2>&1
+        admixture --cv $(basename $DATASET).bed $K -j$THREADS > admixture_K${K}.log 2>&1
     done
     
     echo ""
@@ -284,9 +351,9 @@ else
     cd - > /dev/null
 fi
 
-# ========== ÉTAPE 10 : VISUALISATIONS R ==========
+# ========== ÉTAPE 12 : VISUALISATIONS R ==========
 echo ""
-echo "ÉTAPE 10: Visualisations"
+echo "ÉTAPE 12: Visualisations"
 echo "----------------------------------------"
 
 Rscript <<'EOF'
@@ -298,176 +365,221 @@ library(pheatmap)
 library(RColorBrewer)
 library(reshape2)
 
-outdir <- "/home/plstenge/coprolites_comparison/14_nuclear_genome_analysis/11_complete_phylogeny/05_analysis"
+outdir <- Sys.getenv("OUT_DIR")
+if(outdir == "") outdir <- "/home/plstenge/coprolites_comparison/14_nuclear_genome_analysis/12_complete_phylogeny_FULLGENOME/05_analysis"
 setwd(outdir)
 
-# ===== 1. PCA =====
-cat("Génération PCA...\n")
-pca <- read.table("pca.eigenvec", header=FALSE)
-colnames(pca) <- c("FID", "IID", paste0("PC", 1:10))
+cat("==========================================\n")
+cat("GÉNÉRATION VISUALISATIONS\n")
+cat("==========================================\n\n")
 
-# Catégoriser
-pca$Category <- "Modern_Domestic"
-pca$Category[grepl("cop", pca$IID)] <- "Ancient"
-pca$Category[grepl("Ammon|Bighorn|Snow|Orientalis|Urial|Mouflon", pca$IID)] <- "Wild"
-
-pca$Type <- factor(pca$Category, levels=c("Ancient", "Modern_Domestic", "Wild"))
-
-# Couleurs
-cols <- c("Ancient"="red", "Modern_Domestic"="steelblue", "Wild"="darkgreen")
-
-# PCA PC1-PC2
-p1 <- ggplot(pca, aes(PC1, PC2, color=Type, label=IID)) +
-  geom_point(size=4, alpha=0.8) +
-  geom_text_repel(size=3.5, fontface="bold", max.overlaps=25, 
-                  segment.size=0.3, box.padding=0.5) +
-  scale_color_manual(values=cols) +
-  theme_bw(base_size=14) +
-  labs(title="PCA: Phylogénie complète des moutons",
-       subtitle=paste0("Anciens (n=4) vs Domestiques modernes (n=9) vs Sauvages (n=5)"),
-       x="PC1", y="PC2") +
-  theme(legend.position="top", legend.text=element_text(size=12, face="bold"))
-
-ggsave("pca_PC1_PC2.pdf", p1, width=16, height=12)
-ggsave("pca_PC1_PC2.png", p1, width=16, height=12, dpi=300)
-
-# PCA PC2-PC3
-p2 <- ggplot(pca, aes(PC2, PC3, color=Type, label=IID)) +
-  geom_point(size=4, alpha=0.8) +
-  geom_text_repel(size=3.5, fontface="bold", max.overlaps=25) +
-  scale_color_manual(values=cols) +
-  theme_bw(base_size=14) +
-  labs(title="PCA: PC2 vs PC3", x="PC2", y="PC3") +
-  theme(legend.position="top")
-
-ggsave("pca_PC2_PC3.pdf", p2, width=16, height=12)
-
-# ===== 2. DISTANCE MATRIX =====
-cat("Analyse des distances...\n")
-dist_mat <- as.matrix(read.table("distances.dist"))
-ids <- read.table("distances.dist.id")$V1
-rownames(dist_mat) <- ids
-colnames(dist_mat) <- ids
-
-# Annotation
-annot_df <- data.frame(
-    Type = ifelse(grepl("cop", ids), "Ancient",
-                  ifelse(grepl("Ammon|Bighorn|Snow|Orientalis|Urial|Mouflon", ids), 
-                         "Wild", "Domestic")),
-    row.names = ids
-)
-
-# Couleurs annotation
-annot_colors <- list(Type = c("Ancient"="red", "Domestic"="steelblue", "Wild"="darkgreen"))
-
-# Heatmap
-pdf("distance_heatmap_full.pdf", width=16, height=15)
-pheatmap(dist_mat,
-         annotation_row = annot_df,
-         annotation_col = annot_df,
-         annotation_colors = annot_colors,
-         display_numbers = FALSE,
-         fontsize = 10,
-         fontsize_row = 9,
-         fontsize_col = 9,
-         main = "Distances génétiques - Phylogénie complète",
-         color = colorRampPalette(c("white", "yellow", "orange", "red", "darkred"))(100),
-         border_color = "grey80")
-dev.off()
-
-# Distances anciens vs modernes
-cat("\n=== DISTANCES MOYENNES PAR CATÉGORIE ===\n")
-
-ancient_ids <- ids[grepl("cop", ids)]
-domestic_ids <- ids[grepl("^(Awassi|Charollais|East|Hu|Kazak|Kermani|Polled|Rambouillet)$", ids)]
-wild_ids <- ids[grepl("Ammon|Bighorn|Snow|Orientalis|Urial|Mouflon", ids)]
-
-for(anc in ancient_ids) {
-    cat(sprintf("\n%s:\n", anc))
+# ===== 1. PCA (échantillons avec données OK) =====
+if(file.exists("pca.eigenvec")) {
+  cat("1. PCA (échantillons >50% génotypés)...\n")
+  
+  pca <- read.table("pca.eigenvec", header=FALSE)
+  n_pcs <- ncol(pca) - 2
+  colnames(pca) <- c("FID", "IID", paste0("PC", 1:n_pcs))
+  
+  pca$Category <- "Modern_Domestic"
+  pca$Category[grepl("cop", pca$IID, ignore.case=TRUE)] <- "Ancient"
+  pca$Category[grepl("Ammon|Bighorn|Snow|Orientalis|Urial|Mouflon", pca$IID)] <- "Wild"
+  pca$Type <- factor(pca$Category, levels=c("Ancient", "Modern_Domestic", "Wild"))
+  
+  cols <- c("Ancient"="red", "Modern_Domestic"="steelblue", "Wild"="darkgreen")
+  
+  if(n_pcs >= 2) {
+    p1 <- ggplot(pca, aes(PC1, PC2, color=Type, label=IID)) +
+      geom_point(size=4, alpha=0.8) +
+      geom_text_repel(size=3.5, fontface="bold", max.overlaps=25, 
+                      segment.size=0.3, box.padding=0.5) +
+      scale_color_manual(values=cols) +
+      theme_bw(base_size=14) +
+      labs(title="PCA: Phylogénie génome entier",
+           subtitle=paste0(nrow(pca), " échantillons avec données suffisantes"),
+           x="PC1", y="PC2") +
+      theme(legend.position="top", legend.text=element_text(size=12, face="bold"))
     
-    # Distances vers domestiques
-    dist_domestic <- dist_mat[anc, domestic_ids]
-    cat(sprintf("  Domestiques: min=%.4f, mean=%.4f, max=%.4f\n",
-                min(dist_domestic), mean(dist_domestic), max(dist_domestic)))
-    cat(sprintf("    Plus proche: %s (%.4f)\n", 
-                names(which.min(dist_domestic)), min(dist_domestic)))
+    ggsave("pca_PC1_PC2.pdf", p1, width=16, height=12)
+    cat("  ✓ pca_PC1_PC2.pdf\n")
+  }
+  
+  if(n_pcs >= 3) {
+    p2 <- ggplot(pca, aes(PC2, PC3, color=Type, label=IID)) +
+      geom_point(size=4, alpha=0.8) +
+      geom_text_repel(size=3.5, fontface="bold", max.overlaps=25) +
+      scale_color_manual(values=cols) +
+      theme_bw(base_size=14) +
+      labs(title="PCA: PC2 vs PC3", x="PC2", y="PC3") +
+      theme(legend.position="top")
     
-    # Distances vers sauvages
-    dist_wild <- dist_mat[anc, wild_ids]
-    cat(sprintf("  Sauvages: min=%.4f, mean=%.4f, max=%.4f\n",
-                min(dist_wild), mean(dist_wild), max(dist_wild)))
-    cat(sprintf("    Plus proche: %s (%.4f)\n", 
-                names(which.min(dist_wild)), min(dist_wild)))
+    ggsave("pca_PC2_PC3.pdf", p2, width=16, height=12)
+    cat("  ✓ pca_PC2_PC3.pdf\n")
+  }
+} else {
+  cat("1. PCA: fichier non trouvé, skip\n")
 }
 
-# ===== 3. ARBRE PHYLOGÉNÉTIQUE =====
-cat("\nConstruction de l'arbre...\n")
-dist_obj <- as.dist(dist_mat)
-tree_nj <- nj(dist_obj)
-tree_rooted <- midpoint(tree_nj)
+cat("\n")
 
-write.tree(tree_nj, "tree_NJ.nwk")
-write.tree(tree_rooted, "tree_NJ_rooted.nwk")
+# ===== 2. DISTANCES (tous échantillons, anciens inclus) =====
+cat("2. Distances génétiques (TOUS échantillons)...\n")
 
-# Plot arbre avec couleurs
-tip_types <- sapply(tree_rooted$tip.label, function(x) {
-    if(grepl("cop", x)) return("Ancient")
-    if(grepl("Ammon|Bighorn|Snow|Orientalis|Urial|Mouflon", x)) return("Wild")
-    return("Domestic")
-})
+if(file.exists("distances_all.dist")) {
+  dist_mat <- as.matrix(read.table("distances_all.dist"))
+  ids <- read.table("distances_all.dist.id")$V1
+  rownames(dist_mat) <- colnames(dist_mat) <- ids
+  
+  annot_df <- data.frame(
+      Type = ifelse(grepl("cop", ids, ignore.case=TRUE), "Ancient",
+                    ifelse(grepl("Ammon|Bighorn|Snow|Orientalis|Urial|Mouflon", ids), 
+                           "Wild", "Domestic")),
+      row.names = ids
+  )
+  
+  annot_colors <- list(Type = c("Ancient"="red", "Domestic"="steelblue", "Wild"="darkgreen"))
+  
+  # Heatmap
+  pdf("distance_heatmap_full.pdf", width=16, height=15)
+  pheatmap(dist_mat,
+           annotation_row = annot_df,
+           annotation_col = annot_df,
+           annotation_colors = annot_colors,
+           display_numbers = FALSE,
+           fontsize = 10,
+           fontsize_row = 9,
+           fontsize_col = 9,
+           main = "Distances génétiques - Génome entier (1-IBS)",
+           color = colorRampPalette(c("white", "yellow", "orange", "red", "darkred"))(100),
+           border_color = "grey80")
+  dev.off()
+  
+  cat("  ✓ distance_heatmap_full.pdf\n")
+  
+  # ===== ANALYSE POSITIONNEMENT ANCIENS =====
+  cat("\n")
+  cat("==========================================\n")
+  cat("POSITIONNEMENT DES ÉCHANTILLONS ANCIENS\n")
+  cat("==========================================\n\n")
+  
+  ancient_ids <- ids[grepl("cop", ids, ignore.case=TRUE)]
+  modern_ids <- ids[!grepl("cop", ids, ignore.case=TRUE)]
+  
+  results <- data.frame()
+  
+  for(anc in ancient_ids) {
+    dists <- dist_mat[anc, modern_ids]
+    dists <- dists[!is.na(dists) & dists > 0]
+    
+    if(length(dists) == 0) {
+      cat(anc, ": AUCUNE distance calculable\n\n")
+      next
+    }
+    
+    top5 <- sort(dists)[1:min(5, length(dists))]
+    
+    cat(anc, ":\n")
+    cat("  Distances calculées:", length(dists), "modernes\n")
+    cat("  Distance moyenne:", round(mean(dists, na.rm=TRUE), 4), "\n")
+    cat("  Top 5 plus proches:\n")
+    
+    for(i in seq_along(top5)) {
+      cat("    ", i, ". ", names(top5)[i], " (dist = ", 
+          round(top5[i], 4), ")\n", sep="")
+      
+      results <- rbind(results, data.frame(
+        Ancient = anc,
+        Rank = i,
+        Modern = names(top5)[i],
+        Distance = top5[i]
+      ))
+    }
+    cat("\n")
+  }
+  
+  write.table(results, "ancient_closest_modern.tsv", 
+              quote=FALSE, row.names=FALSE, sep="\t")
+  cat("✓ Fichier: ancient_closest_modern.tsv\n\n")
+  
+  # ===== ARBRE PHYLOGÉNÉTIQUE =====
+  cat("3. Arbre phylogénétique...\n")
+  
+  dist_obj <- as.dist(dist_mat)
+  tree_nj <- nj(dist_obj)
+  tree_rooted <- midpoint(tree_nj)
+  
+  write.tree(tree_nj, "tree_NJ.nwk")
+  write.tree(tree_rooted, "tree_NJ_rooted.nwk")
+  
+  tip_types <- sapply(tree_rooted$tip.label, function(x) {
+      if(grepl("cop", x, ignore.case=TRUE)) return("Ancient")
+      if(grepl("Ammon|Bighorn|Snow|Orientalis|Urial|Mouflon", x)) return("Wild")
+      return("Domestic")
+  })
+  
+  tip_colors <- c("Ancient"="red", "Domestic"="steelblue", "Wild"="darkgreen")[tip_types]
+  
+  pdf("tree_phylogeny_colored.pdf", width=14, height=16)
+  plot(tree_rooted, 
+       tip.color = tip_colors,
+       cex = 1.2,
+       font = 2,
+       edge.width = 2,
+       main = "Phylogénie génome entier: Anciens + Modernes",
+       cex.main = 1.8)
+  add.scale.bar(cex = 1.3, lwd = 2)
+  legend("topleft", 
+         legend = c("Ancien", "Domestique", "Sauvage"),
+         text.col = c("red", "steelblue", "darkgreen"),
+         bty = "n", cex = 1.5, pch = 19, 
+         col = c("red", "steelblue", "darkgreen"))
+  dev.off()
+  
+  cat("  ✓ tree_phylogeny_colored.pdf\n")
+  
+  # Arbre circulaire
+  library(ggtree)
+  
+  tip_data <- data.frame(
+      label = tree_rooted$tip.label,
+      Type = tip_types,
+      stringsAsFactors = FALSE
+  )
+  
+  p_tree <- ggtree(tree_rooted, layout="circular") %<+% tip_data +
+      geom_tiplab(aes(color=Type), size=3.5, fontface="bold", offset=0.002) +
+      geom_tippoint(aes(color=Type), size=3) +
+      scale_color_manual(values=c("Ancient"="red", "Domestic"="steelblue", "Wild"="darkgreen")) +
+      theme(legend.position="right", legend.text=element_text(size=12, face="bold")) +
+      labs(title="Phylogénie circulaire - Génome entier")
+  
+  ggsave("tree_circular.pdf", p_tree, width=14, height=14)
+  cat("  ✓ tree_circular.pdf\n")
+  
+} else {
+  cat("2. Distances: fichier non trouvé\n")
+}
 
-tip_colors <- cols[tip_types]
-
-pdf("tree_phylogeny_colored.pdf", width=14, height=16)
-plot(tree_rooted, 
-     tip.color = tip_colors,
-     cex = 1.2,
-     font = 2,
-     edge.width = 2,
-     main = "Phylogénie: Anciens, Domestiques et Sauvages",
-     cex.main = 1.8)
-add.scale.bar(cex = 1.3, lwd = 2)
-legend("topleft", 
-       legend = c("Ancien", "Domestique", "Sauvage"),
-       text.col = c("red", "steelblue", "darkgreen"),
-       bty = "n", cex = 1.5, pch = 19, col = c("red", "steelblue", "darkgreen"))
-dev.off()
-
-# Arbre circulaire (ggtree)
-library(ggtree)
-
-tip_data <- data.frame(
-    label = tree_rooted$tip.label,
-    Type = tip_types,
-    stringsAsFactors = FALSE
-)
-
-p_tree <- ggtree(tree_rooted, layout="circular") %<+% tip_data +
-    geom_tiplab(aes(color=Type), size=3.5, fontface="bold", offset=0.002) +
-    geom_tippoint(aes(color=Type), size=3) +
-    scale_color_manual(values=cols) +
-    theme(legend.position="right", legend.text=element_text(size=12, face="bold")) +
-    labs(title="Phylogénie circulaire")
-
-ggsave("tree_circular.pdf", p_tree, width=14, height=14)
+cat("\n")
 
 # ===== 4. ADMIXTURE =====
-cat("\nADMIXTURE plots...\n")
+cat("4. ADMIXTURE...\n")
 
-cv_errors <- data.frame()
-for(k in 2:10) {
-    log_file <- paste0("admixture_K", k, ".log")
-    if(file.exists(log_file)) {
-        lines <- readLines(log_file)
-        cv_line <- grep("CV error", lines, value=TRUE)
-        if(length(cv_line) > 0) {
-            cv_val <- as.numeric(sub(".*: ", "", cv_line))
-            cv_errors <- rbind(cv_errors, data.frame(K=k, CV=cv_val))
-        }
+cv_files <- Sys.glob("admixture_K*.log")
+if(length(cv_files) > 0) {
+  cv_errors <- data.frame()
+  
+  for(log_file in cv_files) {
+    lines <- readLines(log_file)
+    cv_line <- grep("CV error", lines, value=TRUE)
+    if(length(cv_line) > 0) {
+      k <- as.numeric(sub(".*_K([0-9]+)\\.log", "\\1", log_file))
+      cv_val <- as.numeric(sub(".*: ", "", cv_line))
+      cv_errors <- rbind(cv_errors, data.frame(K=k, CV=cv_val))
     }
-}
-
-if(nrow(cv_errors) > 0) {
+  }
+  
+  if(nrow(cv_errors) > 0) {
     p_cv <- ggplot(cv_errors, aes(K, CV)) +
         geom_line(size=1.2) +
         geom_point(size=4) +
@@ -475,36 +587,16 @@ if(nrow(cv_errors) > 0) {
         labs(title="ADMIXTURE Cross-Validation", x="K", y="CV error")
     
     ggsave("admixture_CV.pdf", p_cv, width=10, height=6)
+    cat("  ✓ admixture_CV.pdf\n")
     
     best_k <- cv_errors$K[which.min(cv_errors$CV)]
-    cat(sprintf("Meilleur K: %d\n", best_k))
-    
-    # Plot ADMIXTURE
-    q_file <- paste0("all_samples.", best_k, ".Q")
-    if(file.exists(q_file)) {
-        q <- read.table(q_file)
-        fam <- read.table("all_samples.fam")
-        
-        q$Sample <- fam$V2
-        q$Type <- annot_df[q$Sample, "Type"]
-        q <- q[order(match(q$Type, c("Ancient", "Domestic", "Wild"))), ]
-        q$Order <- 1:nrow(q)
-        
-        q_melt <- melt(q, id.vars=c("Sample", "Type", "Order"))
-        
-        p_admix <- ggplot(q_melt, aes(x=Order, y=value, fill=variable)) +
-            geom_bar(stat="identity", width=1) +
-            facet_grid(~Type, scales="free_x", space="free_x") +
-            theme_minimal(base_size=14) +
-            labs(title=paste0("ADMIXTURE K=", best_k), x="", y="Ancestry") +
-            theme(axis.text.x=element_blank(), legend.position="none",
-                  strip.text=element_text(face="bold", size=12))
-        
-        ggsave(paste0("admixture_K", best_k, ".pdf"), p_admix, width=16, height=6)
-    }
+    cat("  Meilleur K:", best_k, "\n")
+  }
 }
 
-cat("\n✓ Toutes les visualisations générées\n")
+cat("\n==========================================\n")
+cat("✓ VISUALISATIONS TERMINÉES\n")
+cat("==========================================\n")
 EOF
 
 echo ""
@@ -519,7 +611,7 @@ echo "  • PCA: ${OUT_DIR}/05_analysis/pca_PC1_PC2.pdf"
 echo "  • Heatmap: ${OUT_DIR}/05_analysis/distance_heatmap_full.pdf"
 echo "  • Arbre rectangulaire: ${OUT_DIR}/05_analysis/tree_phylogeny_colored.pdf"
 echo "  • Arbre circulaire: ${OUT_DIR}/05_analysis/tree_circular.pdf"
-echo "  • ADMIXTURE: ${OUT_DIR}/05_analysis/admixture_K*.pdf"
+echo "  • Positionnement anciens: ${OUT_DIR}/05_analysis/ancient_closest_modern.tsv"
 echo ""
 echo "Données:"
 echo "  • VCF final: ${OUT_DIR}/04_merged/all_samples_filtered.vcf.gz"
@@ -529,7 +621,7 @@ echo ""
 echo "Échantillons analysés:"
 echo "  • Anciens: cop408, cop410, cop412, cop414"
 echo "  • Domestiques: Awassi, Charollais, East Friesian, Hu Sheep,"
-echo "                 Kazak, Kermani, Polled Dorset, Rambouillet"
+echo "                 Kazak, Kermani, Polled Dorset"
 echo "  • Sauvages: Mouflon, Argali (Ammon polii), Bighorn (canadensis),"
 echo "              Snow Sheep (nivicola), Orientalis, Urial (vignei)"
 echo ""
