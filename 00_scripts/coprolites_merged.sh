@@ -1,5 +1,4 @@
 #!/bin/bash
-
 #SBATCH --job-name=coprolites_merged
 #SBATCH --ntasks=1
 #SBATCH -p smp
@@ -8,11 +7,10 @@
 #SBATCH --mail-type=ALL
 #SBATCH --error="/home/plstenge/coprolites_comparison/00_scripts/coprolites_merged.err"
 #SBATCH --output="/home/plstenge/coprolites_comparison/00_scripts/coprolites_merged.out"
-
 ################################################################################
 # Author: Pierre-Louis Stenger
 # Date: Janvier 2026
-# 
+
 # Ce script merge les reads de différents runs pour maximiser la profondeur
 # Stratégie: merge R1+R2 par run, puis concatenation des merged entre runs
 # Analyses séparées pour merged et unmerged
@@ -21,7 +19,6 @@
 ################################################################################
 # CONFIGURATION GLOBALE
 ################################################################################
-
 BASE_DIR="/home/plstenge/coprolites_comparison"
 BBDUK="/home/plstenge/bbmap/bbduk.sh"
 CLUMPIFY="/home/plstenge/bbmap/clumpify.sh"
@@ -30,8 +27,17 @@ KRAKEN2_DB="/home/plstenge/k2_core_nt_20250609"
 KRAKENTOOLS_DIR="${BASE_DIR}/08_kraken2/KrakenTools"
 THREADS=36
 
+# === NTC ===
+# Dossier et noms du contrôle négatif
+NTC_DIR="/home/plstenge/coprolites/01_raw_data"
+NTC_R1="${NTC_DIR}/Illumina_NTC_cop_R1.fastq.gz"
+NTC_R2="${NTC_DIR}/Illumina_NTC_cop_R2.fastq.gz"
+NTC_SAMPLE="NTC_cop"
+
 ################################################################################
+
 # ORGANISATION DES DONNÉES - 5 LOTS À MERGER
+
 ################################################################################
 
 echo ""
@@ -44,11 +50,11 @@ mkdir -p "${BASE_DIR}/00_scripts"
 
 # Définition des 5 lots sources
 declare -a SOURCE_LOTS=(
-    "Lot1_illu-4_R1_Ps4_150_Default"
-    "Lot2_Run1_R2_Ps6_150_no_filter"
-    "Lot4_Run2_R2_Ps6_150_no_filter"
-    "Lot6_Run3_R3_Ps8_150_no_filter"
-    "Lot9_Run4_R3_Ps8_75_no_filter"
+"Lot1_illu-4_R1_Ps4_150_Default"
+"Lot2_Run1_R2_Ps6_150_no_filter"
+"Lot4_Run2_R2_Ps6_150_no_filter"
+"Lot6_Run3_R3_Ps8_150_no_filter"
+"Lot9_Run4_R3_Ps8_75_no_filter"
 )
 
 # Mapping des lots vers leurs chemins sources
@@ -68,7 +74,7 @@ LOT_SOURCE["Lot6_Run3_R3_Ps8_150_no_filter"]="/storage/groups/gdec/shared_paleo/
 LOT_MODE["Lot6_Run3_R3_Ps8_150_no_filter"]="subdirs"
 
 LOT_SOURCE["Lot9_Run4_R3_Ps8_75_no_filter"]="/storage/groups/gdec/shared_paleo/E1531_final/run4_20251104_AV241601_E1531_Ps7_Ps8_04112025"
-LOT_MODE["Lot9_Run4_R3_Ps8_75_no_filter"]="subdirs"
+LOT_MODE["Lot9_Run4_R3_R3_Ps8_75_no_filter"]="subdirs"
 
 # Organisation des données brutes
 shopt -s nullglob
@@ -77,7 +83,7 @@ for lot in "${SOURCE_LOTS[@]}"; do
     SRC_DIR="${LOT_SOURCE[$lot]}"
     MODE="${LOT_MODE[$lot]}"
     DEST_DIR="${BASE_DIR}/01_raw_data_merged/${lot}"
-    
+
     echo ""
     echo "------------------------------------------"
     echo "Organisation du ${lot}"
@@ -85,15 +91,15 @@ for lot in "${SOURCE_LOTS[@]}"; do
     echo "Destination : ${DEST_DIR}"
     echo "Mode : ${MODE}"
     echo "------------------------------------------"
-    
+
     # Vérification source
     if [[ ! -d "$SRC_DIR" ]]; then
         echo "⚠ ATTENTION: répertoire source introuvable pour ${lot} : ${SRC_DIR}"
         continue
     fi
-    
+
     mkdir -p "$DEST_DIR"
-    
+
     # Mode flat (Lot1 Illumina)
     if [[ "$MODE" == "flat" ]]; then
         echo "Création de liens symboliques pour ${lot} (mode flat)..."
@@ -106,7 +112,7 @@ for lot in "${SOURCE_LOTS[@]}"; do
                 echo " ✓ Lien créé: ${base_fq}"
             fi
         done
-    
+
     # Mode subdirs (Lots 2, 4, 6, 9)
     elif [[ "$MODE" == "subdirs" ]]; then
         echo "Recherche des sous-dossiers copXXX dans ${SRC_DIR}..."
@@ -114,14 +120,11 @@ for lot in "${SOURCE_LOTS[@]}"; do
             [[ -d "$d" ]] || continue
             folder_name=$(basename "$d")
             sample_id="${folder_name#*_}"
-            
             R1_SRC="${d}/${folder_name}_R1.fastq.gz"
             R2_SRC="${d}/${folder_name}_R2.fastq.gz"
-            
             if [[ -f "$R1_SRC" && -f "$R2_SRC" ]]; then
                 R1_DEST="${DEST_DIR}/${sample_id}_R1.fastq.gz"
                 R2_DEST="${DEST_DIR}/${sample_id}_R2.fastq.gz"
-                
                 if [[ -e "$R1_DEST" || -e "$R2_DEST" ]]; then
                     echo " ↪ Liens déjà présents pour ${sample_id} dans ${lot}, on saute."
                 else
@@ -144,7 +147,34 @@ echo "Organisation des données terminée"
 echo "=========================================="
 
 ################################################################################
+# INTÉGRATION DU CONTRÔLE NÉGATIF NTC DANS LE PIPELINE
+################################################################################
+
+echo ""
+echo "=== Intégration du contrôle NTC ==="
+
+# On crée un petit lot "Lot_NTC" pour le faire passer dans le même pipeline
+NTC_LOT="Lot_NTC"
+NTC_INPUT_DIR="${BASE_DIR}/01_raw_data_merged/${NTC_LOT}"
+mkdir -p "$NTC_INPUT_DIR"
+
+if [[ -f "$NTC_R1" && -f "$NTC_R2" ]]; then
+    echo " → Lien vers les fichiers NTC dans ${NTC_INPUT_DIR}"
+    ln -sf "$NTC_R1" "${NTC_INPUT_DIR}/${NTC_SAMPLE}_R1.fastq.gz"
+    ln -sf "$NTC_R2" "${NTC_INPUT_DIR}/${NTC_SAMPLE}_R2.fastq.gz"
+else
+    echo "⚠ ATTENTION: Fichiers NTC introuvables dans ${NTC_DIR}"
+fi
+
+# On ajoute le lot NTC dans la liste des lots à traiter pour la partie nettoyage/clumpify/fastp
+SOURCE_LOTS+=("$NTC_LOT")
+LOT_SOURCE["$NTC_LOT"]="$NTC_INPUT_DIR"
+LOT_MODE["$NTC_LOT"]="flat"
+
+################################################################################
+
 # ACTIVATION ENVIRONNEMENT CONDA
+
 ################################################################################
 
 echo ""
@@ -153,9 +183,9 @@ module load conda/4.12.0
 source ~/.bashrc
 conda activate metagenomics
 echo "Environnement activé: metagenomics"
-
 echo ""
-echo "=== Vérification taxonomie Krona (optionnelle) ===" 
+echo "=== Vérification taxonomie Krona (optionnelle) ==="
+
 # Vérification simple sans appel à ktUpdateTaxonomy
 if command -v ktImportTaxonomy >/dev/null 2>&1; then
     echo "✓ Krona disponible"
@@ -164,7 +194,9 @@ else
 fi
 
 ################################################################################
+
 # CRÉATION ARBORESCENCE
+
 ################################################################################
 
 echo ""
@@ -194,113 +226,113 @@ echo "Arborescence créée."
 ##################################################################################
 ## ÉTAPE 1: NETTOYAGE PAR LOT (BBDuk + FastUniq + Clumpify)
 #################################################################################
-#
+
 #echo ""
 #echo "=========================================="
 #echo "ÉTAPE 1: Nettoyage des reads par lot"
 #echo "=========================================="
-#
+
 #for lot in "${SOURCE_LOTS[@]}"; do
-#    echo ""
-#    echo "=========================================="
-#    echo "Traitement du ${lot}"
-#    echo "=========================================="
-#    
-#    INPUT_DIR="${BASE_DIR}/01_raw_data_merged/${lot}"
-#    
-#    if [[ ! -d "$INPUT_DIR" ]]; then
-#        echo "⚠ Répertoire introuvable: ${INPUT_DIR}, on skip"
-#        continue
-#    fi
-#    
-#    # ------------------------------------------------------------------
-#    # BBDuk
-#    # ------------------------------------------------------------------
-#    echo ""
-#    echo "→ BBDuk pour ${lot}..."
-#    BBDUK_OUT="${BASE_DIR}/03_bbduk/${lot}"
-#    mkdir -p "$BBDUK_OUT"
-#    
-#    cd "$INPUT_DIR"
-#    for r1_file in *_R1.fastq.gz; do
-#        r2_file="${r1_file/_R1/_R2}"
-#        if [[ ! -f "$r2_file" ]]; then
-#            echo " ✗ Fichier R2 manquant pour $r1_file"
-#            continue
-#        fi
-#        
-#        base_name="${r1_file%%_R1.fastq.gz}"
-#        echo " • Traitement de ${base_name}..."
-#        
-#        $BBDUK -Xmx4g \
-#            in1="$r1_file" \
-#            in2="$r2_file" \
-#            out1="${BBDUK_OUT}/clean_${r1_file}" \
-#            out2="${BBDUK_OUT}/clean_${r2_file}" \
-#            ref=$PHIX \
-#            ktrim=rl k=23 mink=11 hdist=1 \
-#            tpe tbo \
-#            minlen=25 \
-#            qtrim=r trimq=20 \
-#            stats="${BBDUK_OUT}/${base_name}_bbduk_stats.txt"
-#    done
-#    
-#    # ------------------------------------------------------------------
-#    # FastUniq
-#    # ------------------------------------------------------------------
-#    echo ""
-#    echo "→ FastUniq pour ${lot}..."
-#    FASTUNIQ_OUT="${BASE_DIR}/04_fastuniq/${lot}"
-#    mkdir -p "$FASTUNIQ_OUT"
-#    
-#    TMP="/tmp/fastuniq_${lot}_$$"
-#    mkdir -p "$TMP"
-#    
-#    cd "$BBDUK_OUT" || continue
-#    for R1_gz in clean_*_R1.fastq.gz; do
-#        base=$(echo "$R1_gz" | sed 's/_R1\.fastq\.gz//')
-#        R2_gz="${base}_R2.fastq.gz"
-#        
-#        if [[ -f "$R2_gz" ]]; then
-#            echo " • Déduplication de ${base}..."
-#            R1_tmp="${TMP}/${base}_R1.fastq"
-#            R2_tmp="${TMP}/${base}_R2.fastq"
-#            listfile="${TMP}/${base}.list"
-#            
-#            zcat "$R1_gz" > "$R1_tmp"
-#            zcat "$R2_gz" > "$R2_tmp"
-#            echo -e "${R1_tmp}\n${R2_tmp}" > "$listfile"
-#            
-#            fastuniq -i "$listfile" -t q \
-#                -o "${FASTUNIQ_OUT}/${base}_dedup_R1.fastq" \
-#                -p "${FASTUNIQ_OUT}/${base}_dedup_R2.fastq"
-#            
-#            rm -f "$R1_tmp" "$R2_tmp" "$listfile"
-#        fi
-#    done
-#    rm -rf "$TMP"
-#    
-#    # ------------------------------------------------------------------
-#    # Clumpify
-#    # ------------------------------------------------------------------
-#    echo ""
-#    echo "→ Clumpify pour ${lot}..."
-#    CLUMPIFY_OUT="${BASE_DIR}/05_clumpify/${lot}"
-#    mkdir -p "$CLUMPIFY_OUT"
-#    
-#    for R1 in "${FASTUNIQ_OUT}"/*_R1.fastq; do
-#        R2="${R1/_R1.fastq/_R2.fastq}"
-#        if [[ -f "$R2" ]]; then
-#            base=$(basename "$R1" _R1.fastq)
-#            echo " • Clumpify de ${base}..."
-#            
-#            $CLUMPIFY \
-#                in="$R1" in2="$R2" \
-#                out="${CLUMPIFY_OUT}/${base}_clumpify_R1.fastq.gz" \
-#                out2="${CLUMPIFY_OUT}/${base}_clumpify_R2.fastq.gz" \
-#                dedupe=t
-#        fi
-#    done
+#   echo ""
+#   echo "=========================================="
+#   echo "Traitement du ${lot}"
+#   echo "=========================================="
+#
+#   INPUT_DIR="${BASE_DIR}/01_raw_data_merged/${lot}"
+#
+#   if [[ ! -d "$INPUT_DIR" ]]; then
+#       echo "⚠ Répertoire introuvable: ${INPUT_DIR}, on skip"
+#       continue
+#   fi
+#
+#   # ------------------------------------------------------------------
+#   # BBDuk
+#   # ------------------------------------------------------------------
+#   echo ""
+#   echo "→ BBDuk pour ${lot}..."
+#   BBDUK_OUT="${BASE_DIR}/03_bbduk/${lot}"
+#   mkdir -p "$BBDUK_OUT"
+#
+#   cd "$INPUT_DIR"
+#   for r1_file in *_R1.fastq.gz; do
+#       r2_file="${r1_file/_R1/_R2}"
+#       if [[ ! -f "$r2_file" ]]; then
+#           echo " ✗ Fichier R2 manquant pour $r1_file"
+#           continue
+#       fi
+#
+#       base_name="${r1_file%%_R1.fastq.gz}"
+#       echo " • Traitement de ${base_name}..."
+#
+#       $BBDUK -Xmx4g \
+#           in1="$r1_file" \
+#           in2="$r2_file" \
+#           out1="${BBDUK_OUT}/clean_${r1_file}" \
+#           out2="${BBDUK_OUT}/clean_${r2_file}" \
+#           ref=$PHIX \
+#           ktrim=rl k=23 mink=11 hdist=1 \
+#           tpe tbo \
+#           minlen=25 \
+#           qtrim=r trimq=20 \
+#           stats="${BBDUK_OUT}/${base_name}_bbduk_stats.txt"
+#   done
+#
+#   # ------------------------------------------------------------------
+#   # FastUniq
+#   # ------------------------------------------------------------------
+#   echo ""
+#   echo "→ FastUniq pour ${lot}..."
+#   FASTUNIQ_OUT="${BASE_DIR}/04_fastuniq/${lot}"
+#   mkdir -p "$FASTUNIQ_OUT"
+#
+#   TMP="/tmp/fastuniq_${lot}_$$"
+#   mkdir -p "$TMP"
+#
+#   cd "$BBDUK_OUT" || continue
+#   for R1_gz in clean_*_R1.fastq.gz; do
+#       base=$(echo "$R1_gz" | sed 's/_R1\.fastq\.gz//')
+#       R2_gz="${base}_R2.fastq.gz"
+#
+#       if [[ -f "$R2_gz" ]]; then
+#           echo " • Déduplication de ${base}..."
+#           R1_tmp="${TMP}/${base}_R1.fastq"
+#           R2_tmp="${TMP}/${base}_R2.fastq"
+#           listfile="${TMP}/${base}.list"
+#
+#           zcat "$R1_gz" > "$R1_tmp"
+#           zcat "$R2_gz" > "$R2_tmp"
+#           echo -e "${R1_tmp}\n${R2_tmp}" > "$listfile"
+#
+#           fastuniq -i "$listfile" -t q \
+#               -o "${FASTUNIQ_OUT}/${base}_dedup_R1.fastq" \
+#               -p "${FASTUNIQ_OUT}/${base}_dedup_R2.fastq"
+#
+#           rm -f "$R1_tmp" "$R2_tmp" "$listfile"
+#       fi
+#   done
+#   rm -rf "$TMP"
+#
+#   # ------------------------------------------------------------------
+#   # Clumpify
+#   # ------------------------------------------------------------------
+#   echo ""
+#   echo "→ Clumpify pour ${lot}..."
+#   CLUMPIFY_OUT="${BASE_DIR}/05_clumpify/${lot}"
+#   mkdir -p "$CLUMPIFY_OUT"
+#
+#   for R1 in "${FASTUNIQ_OUT}"/*_R1.fastq; do
+#       R2="${R1/_R1.fastq/_R2.fastq}"
+#       if [[ -f "$R2" ]]; then
+#           base=$(basename "$R1" _R1.fastq)
+#           echo " • Clumpify de ${base}..."
+#
+#           $CLUMPIFY \
+#               in="$R1" in2="$R2" \
+#               out="${CLUMPIFY_OUT}/${base}_clumpify_R1.fastq.gz" \
+#               out2="${CLUMPIFY_OUT}/${base}_clumpify_R2.fastq.gz" \
+#               dedupe=t
+#       fi
+#   done
 #done
 
 ################################################################################
@@ -316,8 +348,8 @@ echo "=========================================="
 INTERMEDIATE_DIR="${BASE_DIR}/00_intermediate_merged"
 mkdir -p "$INTERMEDIATE_DIR"
 
-# Liste des échantillons uniques
-declare -a ALL_SAMPLES=("cop408" "cop410" "cop412" "cop414" "cop417")
+# Liste des échantillons uniques (ajout du NTC pour qu'il suive tout le pipeline)
+declare -a ALL_SAMPLES=("cop408" "cop410" "cop412" "cop414" "cop417" "${NTC_SAMPLE}")
 
 # Étape 2a: Merge R1+R2 pour chaque lot/run
 echo ""
@@ -329,21 +361,21 @@ for lot in "${SOURCE_LOTS[@]}"; do
     INPUT_DIR="${BASE_DIR}/05_clumpify/${lot}"
     OUTPUT_DIR="${INTERMEDIATE_DIR}/${lot}"
     mkdir -p "$OUTPUT_DIR"
-    
+
     if [[ ! -d "$INPUT_DIR" ]]; then
         echo "⚠ Pas de données clumpify pour ${lot}"
         continue
     fi
-    
+
     for R1 in "${INPUT_DIR}"/*_R1.fastq.gz; do
         R2="${R1/_R1.fastq.gz/_R2.fastq.gz}"
         if [[ -f "$R2" ]]; then
             base=$(basename "$R1" _R1.fastq.gz)
             echo " • Merge de ${base}..."
-            
+
             fastp \
                 -i "$R1" -I "$R2" \
-			    --merge \
+                --merge \
                 --merged_out "${OUTPUT_DIR}/${base}_merged.fastq.gz" \
                 --out1 "${OUTPUT_DIR}/${base}_unmerged_R1.fastq.gz" \
                 --out2 "${OUTPUT_DIR}/${base}_unmerged_R2.fastq.gz" \
@@ -352,8 +384,6 @@ for lot in "${SOURCE_LOTS[@]}"; do
                 --thread 4 \
                 --length_required 30 \
                 --qualified_quality_phred 20
-			
-			
         fi
     done
 done
@@ -372,15 +402,15 @@ for sample in "${ALL_SAMPLES[@]}"; do
     echo "=========================================="
     echo "Concatenation pour ${sample}"
     echo "=========================================="
-    
+
     # Rechercher tous les fichiers merged pour cet échantillon
     merged_files=()
     unmerged_r1_files=()
     unmerged_r2_files=()
-    
+
     for lot in "${SOURCE_LOTS[@]}"; do
         lot_dir="${INTERMEDIATE_DIR}/${lot}"
-        
+
         # Chercher les fichiers merged (sans le préfixe "clean_")
         for mf in "${lot_dir}"/clean_${sample}_dedup_clumpify_merged.fastq.gz; do
             if [[ -f "$mf" ]]; then
@@ -388,7 +418,7 @@ for sample in "${ALL_SAMPLES[@]}"; do
                 echo " ✓ Trouvé merged: $(basename $mf) dans ${lot}"
             fi
         done
-        
+
         # Chercher les fichiers unmerged
         for uf1 in "${lot_dir}"/clean_${sample}_dedup_clumpify_unmerged_R1.fastq.gz; do
             if [[ -f "$uf1" ]]; then
@@ -401,7 +431,7 @@ for sample in "${ALL_SAMPLES[@]}"; do
             fi
         done
     done
-    
+
     # Concatenation des merged
     if [[ ${#merged_files[@]} -gt 0 ]]; then
         echo " → Concatenation de ${#merged_files[@]} fichiers merged..."
@@ -410,7 +440,7 @@ for sample in "${ALL_SAMPLES[@]}"; do
     else
         echo " ⚠ Aucun fichier merged trouvé pour ${sample}"
     fi
-    
+
     # Concatenation des unmerged
     if [[ ${#unmerged_r1_files[@]} -gt 0 ]]; then
         echo " → Concatenation de ${#unmerged_r1_files[@]} paires unmerged..."
@@ -478,7 +508,7 @@ mkdir -p "$KRAKEN_MERGED"
 for sample in "${ALL_SAMPLES[@]}"; do
     echo ""
     echo "Kraken2 pour ${sample} (merged)..."
-    
+
     # Analyse merged
     MERGED="${FINAL_MERGED_DIR}/${sample}_final_merged.fastq.gz"
     if [[ -f "$MERGED" ]]; then
@@ -507,7 +537,7 @@ mkdir -p "$KRAKEN_UNMERGED"
 for sample in "${ALL_SAMPLES[@]}"; do
     echo ""
     echo "Kraken2 pour ${sample} (unmerged)..."
-    
+
     # Analyse unmerged
     R1="${FINAL_UNMERGED_DIR}/${sample}_final_unmerged_R1.fastq.gz"
     R2="${FINAL_UNMERGED_DIR}/${sample}_final_unmerged_R2.fastq.gz"
@@ -600,8 +630,8 @@ MPA_MERGED="${BASE_DIR}/10_mpa_tables/merged_reads"
 mkdir -p "$MPA_MERGED"
 
 cd "$KRAKEN_MERGED"
-
 declare -a mpa_files_merged=()
+
 for report in *.report; do
     if [[ -f "$report" ]]; then
         base=$(basename "$report" .report)
@@ -630,8 +660,8 @@ MPA_UNMERGED="${BASE_DIR}/10_mpa_tables/unmerged_reads"
 mkdir -p "$MPA_UNMERGED"
 
 cd "$KRAKEN_UNMERGED"
-
 declare -a mpa_files_unmerged=()
+
 for report in *.report; do
     if [[ -f "$report" ]]; then
         base=$(basename "$report" .report)
@@ -659,18 +689,18 @@ echo "=========================================="
 SUMMARY_TABLE="${BASE_DIR}/11_summary_tables/sequences_summary_merged.tsv"
 
 cat > "$SUMMARY_TABLE" << 'HEADER'
-Sample	Type	Nb_sequences	Longueur_moyenne	GC_percent
+Sample Type Nb_sequences Longueur_moyenne GC_percent
 HEADER
 
 function extract_stats() {
     local file=$1
     local sample=$2
     local type=$3
-    
+
     if [[ ! -f "$file" ]]; then
         return 1
     fi
-    
+
     nb_seq=$(zcat "$file" 2>/dev/null | echo $((`wc -l`/4)))
     stats=$(zcat "$file" 2>/dev/null | awk 'NR%4==2 {
         total_len += length($0)
@@ -686,24 +716,21 @@ function extract_stats() {
             printf "0\t0"
         }
     }')
-    
+
     echo -e "${sample}\t${type}\t${nb_seq}\t${stats}" >> "$SUMMARY_TABLE"
 }
 
 echo "Calcul des statistiques..."
 for sample in "${ALL_SAMPLES[@]}"; do
     echo " → ${sample}..."
-    
     merged="${FINAL_MERGED_DIR}/${sample}_final_merged.fastq.gz"
     if [[ -f "$merged" ]]; then
         extract_stats "$merged" "$sample" "merged"
     fi
-    
     unmerged_r1="${FINAL_UNMERGED_DIR}/${sample}_final_unmerged_R1.fastq.gz"
     if [[ -f "$unmerged_r1" ]]; then
         extract_stats "$unmerged_r1" "$sample" "unmerged_R1"
     fi
-    
     unmerged_r2="${FINAL_UNMERGED_DIR}/${sample}_final_unmerged_R2.fastq.gz"
     if [[ -f "$unmerged_r2" ]]; then
         extract_stats "$unmerged_r2" "$sample" "unmerged_R2"
@@ -716,6 +743,12 @@ echo ""
 echo "Aperçu:"
 head -20 "$SUMMARY_TABLE" | column -t
 
+################################################################################
+# À PARTIR D'ICI: PIPELINE MAPDAMAGE (inchangé sauf que NTC est aussi présent
+# dans les fichiers Kraken/FASTQ, ce qui te permet ensuite d'exclure les taxons
+# du NTC dans tes analyses R ou en post-traitement).
+################################################################################
+
 echo ""
 echo "=========================================="
 echo "ÉTAPE 8: MapDamage - Analyse des dommages (UNMERGED READS)"
@@ -724,11 +757,9 @@ echo ""
 
 # ========== INITIALISATION CONDA POUR SLURM ==========
 echo "Initialisation de conda..."
-
 module load conda/4.12.0
 source ~/.bashrc
 conda activate mapdamage_py39
-
 echo "✓ Environnement mapdamage_py39 activé"
 
 # ========== CONFIGURATION GLOBALE ==========
@@ -738,18 +769,17 @@ THREADS=36
 
 echo ""
 echo "Configuration:"
-echo "  BASE_DIR: $BASE_DIR"
-echo "  KRAKENTOOLS_DIR: $KRAKENTOOLS_DIR"
+echo " BASE_DIR: $BASE_DIR"
+echo " KRAKENTOOLS_DIR: $KRAKENTOOLS_DIR"
 
 # ========== VÉRIFICATION DES OUTILS ==========
 echo ""
 echo "Vérification des outils disponibles:"
-
 for tool in bwa samtools mapDamage python3; do
     if command -v "$tool" &>/dev/null; then
-        echo "  ✓ $tool: $(which $tool)"
+        echo " ✓ $tool: $(which $tool)"
     else
-        echo "  ✗ $tool: NON TROUVÉ"
+        echo " ✗ $tool: NON TROUVÉ"
         [[ "$tool" == "mapDamage" ]] && { echo "ERREUR CRITIQUE: mapDamage requis"; exit 1; }
     fi
 done
@@ -767,31 +797,31 @@ echo "Vérification des répertoires source:"
 KRAKEN_UNMERGED="${BASE_DIR}/08_kraken2/unmerged_reads"
 FINAL_UNMERGED_DIR="${BASE_DIR}/06_fastp/unmerged_reads"
 
-echo "  KRAKEN_UNMERGED: $KRAKEN_UNMERGED"
+echo " KRAKEN_UNMERGED: $KRAKEN_UNMERGED"
 if [[ -d "$KRAKEN_UNMERGED" ]]; then
     N_KRAKEN=$(ls -1 "$KRAKEN_UNMERGED"/*.kraken 2>/dev/null | wc -l)
-    echo "    ✓ Existe ($N_KRAKEN fichiers .kraken)"
+    echo " ✓ Existe ($N_KRAKEN fichiers .kraken)"
 else
-    echo "    ✗ MANQUANT"
+    echo " ✗ MANQUANT"
     exit 1
 fi
 
-echo "  FINAL_UNMERGED_DIR: $FINAL_UNMERGED_DIR"
+echo " FINAL_UNMERGED_DIR: $FINAL_UNMERGED_DIR"
 if [[ -d "$FINAL_UNMERGED_DIR" ]]; then
     N_FQ=$(ls -1 "$FINAL_UNMERGED_DIR"/*.fastq.gz 2>/dev/null | wc -l)
-    echo "    ✓ Existe ($N_FQ fichiers fastq.gz)"
+    echo " ✓ Existe ($N_FQ fichiers fastq.gz)"
 else
-    echo "    ✗ MANQUANT"
+    echo " ✗ MANQUANT"
     exit 1
 fi
 
 # ========== SETUP RÉPERTOIRES ==========
-
 DAMAGE_UNMERGED_BASE="${BASE_DIR}/12_mapdamage/unmerged_reads"
 mkdir -p "$DAMAGE_UNMERGED_BASE"
 
 LOGFILE="${BASE_DIR}/00_scripts/mapdamage_$(date +%Y%m%d_%H%M%S).txt"
 touch "$LOGFILE"
+
 MAPPING_INFO="${BASE_DIR}/11_summary_tables/mapping_bwa_info_unmerged.tsv"
 mkdir -p "${BASE_DIR}/11_summary_tables"
 
@@ -823,18 +853,16 @@ calculate_mapping_rate() {
     local sample_name="$2"
     local species="$3"
     local type="$4"
-    
+
     if [[ -f "$bam_file" ]]; then
         local total=$(samtools view -c "$bam_file" 2>/dev/null || echo 0)
         local mapped=$(samtools view -c -F 4 "$bam_file" 2>/dev/null || echo 0)
         local rate=0
-        
         if [[ $total -gt 0 ]]; then
             rate=$(echo "scale=1; $mapped * 100 / $total" | bc 2>/dev/null || echo "0")
         fi
-        
         echo -e "${sample_name}\t${species}\t${type}\t${total}\t${mapped}\t${rate}" >> "$MAPPING_INFO"
-        echo "    Stats: ${mapped}/${total} mappés (${rate}%)" | tee -a "$LOGFILE"
+        echo " Stats: ${mapped}/${total} mappés (${rate}%)" | tee -a "$LOGFILE"
     fi
 }
 
@@ -842,14 +870,14 @@ run_mapdamage_safe() {
     local bam_file="$1"
     local ref_fasta="$2"
     local output_dir="$3"
-    
+
     if [[ ! -s "$bam_file" ]]; then
-        echo "    ⚠ Fichier BAM vide ou inexistant"
+        echo " ⚠ Fichier BAM vide ou inexistant"
         return 0
     fi
-    
+
     mkdir -p "$output_dir"
-    echo -n "    → MapDamage en cours..."
+    echo -n " → MapDamage en cours..."
     if mapDamage -i "$bam_file" -r "$ref_fasta" --folder "$output_dir" --no-stats 2>>"$LOGFILE"; then
         echo " ✓ OK"
     else
@@ -871,41 +899,40 @@ declare -A FIXED_GENOMES
 for GROUP in "${!TAXONS[@]}"; do
     ORIGINAL_REF="${TAXONS[$GROUP]#*:}"
     FIXED_REF="/home/plstenge/genomes/$(basename "${ORIGINAL_REF%.*}").fixed.fa"
-    
+
     echo ""
     echo "→ ${GROUP}"
-    
+
     if [[ ! -f "$ORIGINAL_REF" ]]; then
-        echo "  ✗ Génome non trouvé: $ORIGINAL_REF"
+        echo " ✗ Génome non trouvé: $ORIGINAL_REF"
         continue
     fi
-    
-    echo "  Source: $(du -h "$ORIGINAL_REF" | cut -f1)"
-    
+
+    echo " Source: $(du -h "$ORIGINAL_REF" | cut -f1)"
+
     # Créer lien symbolique
     ln -sf "$ORIGINAL_REF" "$FIXED_REF" 2>/dev/null
     FIXED_GENOMES[$GROUP]="$FIXED_REF"
-    
+
     # Index BWA (peut prendre du temps)
     if [[ ! -f "${FIXED_REF}.bwt" ]]; then
-        echo "  → Indexation BWA (peut prendre 10-30 min)..."
+        echo " → Indexation BWA (peut prendre 10-30 min)..."
         timeout 1800 bwa index "$FIXED_REF" 2>&1 | grep -v "^\[" | tail -3 >> "$LOGFILE"
-        
         if [[ -f "${FIXED_REF}.bwt" ]]; then
-            echo "  ✓ Index BWA créé"
+            echo " ✓ Index BWA créé"
         else
-            echo "  ⚠ Index BWA incomplet"
+            echo " ⚠ Index BWA incomplet"
         fi
     else
-        echo "  ✓ Index BWA existant"
+        echo " ✓ Index BWA existant"
     fi
-    
+
     # Index samtools
     if [[ ! -f "${FIXED_REF}.fai" ]]; then
         samtools faidx "$FIXED_REF" 2>/dev/null
-        echo "  ✓ Index samtools créé"
+        echo " ✓ Index samtools créé"
     else
-        echo "  ✓ Index samtools existant"
+        echo " ✓ Index samtools existant"
     fi
 done
 
@@ -927,39 +954,41 @@ if [[ -d "$KRAKEN_UNMERGED" ]] && ls "$KRAKEN_UNMERGED"/*.kraken >/dev/null 2>&1
     for KRAKEN_FILE in "$KRAKEN_UNMERGED"/*.kraken; do
         KRAKEN_BASE=$(basename "$KRAKEN_FILE" .kraken)
         SAMPLE="${KRAKEN_BASE%_unmerged}"
+
         R1="${FINAL_UNMERGED_DIR}/${SAMPLE}_final_unmerged_R1.fastq.gz"
         R2="${FINAL_UNMERGED_DIR}/${SAMPLE}_final_unmerged_R2.fastq.gz"
-        
+
         # Vérifier que les fichiers existent et ne sont pas vides
         if [[ ! -f "$R1" || ! -f "$R2" || ! -s "$R1" || ! -s "$R2" ]]; then
             echo ""
             echo "⚠ Fichiers unmerged manquants ou vides pour $SAMPLE"
             continue
         fi
-        
+
         echo ""
         echo "┌─────────────────────────────────────────"
         echo "│ ${SAMPLE} (unmerged - $(ls -lh $R1 | awk '{print $5}') + $(ls -lh $R2 | awk '{print $5}'))"
         echo "└─────────────────────────────────────────"
-        
+
         for GROUP in "${!TAXONS[@]}"; do
             REF="${FIXED_GENOMES[$GROUP]}"
             TAX_ID="${TAXONS[$GROUP]%:*}"
-            
+
             if [[ -z "$REF" || ! -f "$REF" ]]; then
-                echo "  ⚠ Génome non disponible pour ${GROUP}"
+                echo " ⚠ Génome non disponible pour ${GROUP}"
                 continue
             fi
-            
+
             OUTDIR="${DAMAGE_UNMERGED_BASE}/${GROUP}"
             mkdir -p "$OUTDIR"
+
             OUT_R1="${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R1.fastq"
             OUT_R2="${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R2.fastq"
-            
+
             echo ""
-            echo "  → ${GROUP} (TaxID: ${TAX_ID})"
-            echo "    Extraction reads paired-end..."
-            
+            echo " → ${GROUP} (TaxID: ${TAX_ID})"
+            echo " Extraction reads paired-end..."
+
             # Extraire les reads pour ce taxon
             python3 "${KRAKENTOOLS_DIR}/extract_kraken_reads.py" \
                 -k "$KRAKEN_FILE" \
@@ -967,48 +996,47 @@ if [[ -d "$KRAKEN_UNMERGED" ]] && ls "$KRAKEN_UNMERGED"/*.kraken >/dev/null 2>&1
                 -t "$TAX_ID" \
                 -o "$OUT_R1" -o2 "$OUT_R2" \
                 --fastq-output 2>>"$LOGFILE"
-            
+
             # Vérifier qu'on a des résultats
             if [[ ! -f "$OUT_R1" || ! -f "$OUT_R2" || ! -s "$OUT_R1" || ! -s "$OUT_R2" ]]; then
-                echo "    ⚠ Aucun read extrait pour ${GROUP}"
+                echo " ⚠ Aucun read extrait pour ${GROUP}"
                 rm -f "$OUT_R1" "$OUT_R2" 2>/dev/null
                 continue
             fi
-            
+
             READ_COUNT=$(grep -c "^@" "$OUT_R1" 2>/dev/null || echo 0)
-            echo "    ✓ ${READ_COUNT} paires extraites"
-            
+            echo " ✓ ${READ_COUNT} paires extraites"
+
             # Mapping BWA paired-end
-            echo "    Mapping BWA paired-end..."
-            
+            echo " Mapping BWA paired-end..."
             bwa aln -n 0.08 -l 24 -k 2 -q 20 -t 4 "$REF" "$OUT_R1" \
                 > "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R1.sai" 2>>"$LOGFILE"
-            
+
             bwa aln -n 0.08 -l 24 -k 2 -q 20 -t 4 "$REF" "$OUT_R2" \
                 > "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R2.sai" 2>>"$LOGFILE"
-            
+
             bwa sampe "$REF" \
                 "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R1.sai" \
                 "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R2.sai" \
                 "$OUT_R1" "$OUT_R2" 2>>"$LOGFILE" | \
                 samtools view -bS - 2>>"$LOGFILE" | \
                 samtools sort -o "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" - 2>>"$LOGFILE"
-            
+
             if [[ ! -f "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" ]]; then
-                echo "    ✗ Erreur lors du mapping"
+                echo " ✗ Erreur lors du mapping"
                 continue
             fi
-            
+
             samtools index "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" 2>>"$LOGFILE"
-            echo "    ✓ Mapping terminé"
-            
+            echo " ✓ Mapping terminé"
+
             # Calculer taux de mapping
             calculate_mapping_rate "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" "$SAMPLE" "$GROUP" "unmerged"
-            
+
             # MapDamage
             run_mapdamage_safe "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" "$REF" \
                 "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_mapDamage"
-            
+
             # Nettoyage (garder les BAM indexés pour futures analyses)
             rm -f "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R1.sai" \
                   "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R2.sai" \
