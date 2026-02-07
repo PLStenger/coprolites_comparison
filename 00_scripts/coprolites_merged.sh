@@ -8,7 +8,7 @@
 #SBATCH --error=/home/plstenge/coprolites_comparison/00_scripts/coprolites_merged.err
 #SBATCH --output=/home/plstenge/coprolites_comparison/00_scripts/coprolites_merged.out
 
-set -euo pipefail
+#set -euo pipefail
 
 ############################################
 # CONFIGURATION GLOBALE
