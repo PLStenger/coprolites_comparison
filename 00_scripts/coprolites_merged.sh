@@ -72,20 +72,20 @@ declare -a SOURCE_LOTS=(
 declare -A LOT_SOURCE
 declare -A LOT_MODE
 
-LOT_SOURCE["Lot1_illu-4_R1_Ps4_150_Default"]="${BASEDIR}/01_raw_data/Lot1_Illumina_R1"
-LOT_MODE["Lot1_illu-4_R1_Ps4_150_Default"]="flat"
+LOT_SOURCE["Lot1_Illumina"]="/home/plstenge/coprolites_comparison/01_raw_data/Lot1_Illumina_R1"
+LOT_MODE["Lot1_Illumina"]="flat"
 
-LOT_SOURCE["Lot2_Run1_R2_Ps6_150_no_filter"]="/storage/groups/gdec/shared/paleo/E1531/final_run1_2025-03-20/AV24-1601_E1531_Ps5_Lane1_Ps6_Lane2"
-LOT_MODE["Lot2_Run1_R2_Ps6_150_no_filter"]="subdirs"
+LOT_SOURCE["Lot2_Run1_R1_Ps4_150_no_filtered"]="/storage/groups/gdec/shared_paleo/E1531_final/run1_20250320_AV241601_E1531_Ps5Lane1_Ps6Lane2"
+LOT_MODE["Lot2_Run1_R1_Ps4_150_no_filtered"]="subdirs"
 
-LOT_SOURCE["Lot4_Run2_R2_Ps6_150_no_filter"]="/storage/groups/gdec/shared/paleo/E1531/final_run2_2025-04-14/AV24-1601_E1531_Ps5_Ps6_14-04-2025"
-LOT_MODE["Lot4_Run2_R2_Ps6_150_no_filter"]="subdirs"
+LOT_SOURCE["Lot4_Run2_R1_Ps6_150_no_filtered"]="/storage/groups/gdec/shared_paleo/E1531_final/run2_20250414_AV241601_E1531_Ps5_Ps6_14042025"
+LOT_MODE["Lot4_Run2_R1_Ps6_150_no_filtered"]="subdirs"
 
-LOT_SOURCE["Lot6_Run3_R3_Ps8_150_no_filter"]="/storage/groups/gdec/shared/paleo/E1531/final_run3_2025-10-08/AV24-1601_E1531_Ps7_Ps8"
-LOT_MODE["Lot6_Run3_R3_Ps8_150_no_filter"]="subdirs"
+LOT_SOURCE["Lot6_Run3_R2_Ps6_150_no_filtered"]="/storage/groups/gdec/shared_paleo/E1531_final/run3_20251008_AV241601_E1531_Ps7_Ps8"
+LOT_MODE["Lot6_Run3_R2_Ps6_150_no_filtered"]="subdirs"
 
-LOT_SOURCE["Lot9_Run4_R3_Ps8_75_no_filter"]="/storage/groups/gdec/shared/paleo/E1531/final_run4_2025-11-04/AV24-1601_E1531_Ps7_Ps8_04-11-2025"
-LOT_MODE["Lot9_Run4_R3_Ps8_75_no_filter"]="subdirs"
+LOT_SOURCE["Lot9_Run4_R2_Ps8_75_no_filtered"]="/storage/groups/gdec/shared_paleo/E1531_final/run4_20251104_AV241601_E1531_Ps7_Ps8_04112025"
+LOT_MODE["Lot9_Run4_R2_Ps8_75_no_filtered"]="subdirs"
 
 # Ajout d’un lot dédié au NTC dans la même logique
 NTC_LOT="Lot_NTC"
