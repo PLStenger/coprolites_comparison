@@ -116,48 +116,48 @@ echo "$(date): Script MapDamage UNMERGED + MERGED démarré" | tee -a "$LOGFILE"
 # ========== GÉNOMES DE RÉFÉRENCE - CONFIGURATION ==========
 # Même logique que dans ta nouvelle version pipeline.sh : TAXID:chemin_fixed.fa
 declare -A TAXONS=(
-     ["Mus_musculus"]="10090:/home/plstenge/genomes/Mus_musculus/Mus_musculus.GRCm39.dna.toplevel.fa"
-     ["Prunus_dulcis"]="3755:/home/plstenge/genomes/Prunus_dulcis/CABIKO01.fasta"
-     ["Olea_europaea"]="4146:/home/plstenge/genomes/Olea_europaea/CACTIH01.fasta"
-     ["Ligustrum_vulgare"]="13597:/home/plstenge/genomes/Ligustrum_vulgare/GCA_963555705.1_daLigVulg1.1_genomic.fna"
-     ["Salix_caprea"]="40685:/home/plstenge/genomes/Salix_caprea/GCA_964035475.1_ddSalCapr1.1_genomic.fna"
-     ["Vitis_vinifera"]="29760:/storage/groups/gdec/shared_paleo/genomes_REF/12Xv2_grapevine_genome_assembly.fa"
-     ["Homo_sapiens"]="9606:/home/plstenge/genomes/Homo_sapiens/GCF_000001405.40_GRCh38.p14_genomic.fna"
-     ["Cannabis_sativa"]="3483:/home/plstenge/genomes/Cannabis_sativa/GCF_029168945.1_ASM2916894v1_genomic.fna"
-     ["Brachypodium_distachyon"]="15367:/home/plstenge/genomes/Brachypodium_distachyon/GCF_000005505.3_Brachypodium_distachyon_v3.0_genomic.fna"
-     ["Lotus_japonicus"]="34305:/home/plstenge/genomes/Lotus_japonicus/GCF_012489685.1_LjGifu_v1.2_genomic.fna"
-     ["Rubus_caesius"]="75065:/home/plstenge/genomes/Rubus_caesius/GCA_964235055.1_drRubCaes1.hap1.1_genomic.fna"
-     ["Mentha_longifolia"]="21819:/home/plstenge/genomes/Mentha_longifolia/GCA_052575335.1_ASM5257533v1_genomic.fna"
-     ["Brassica_oleracea"]="3712:/home/plstenge/genomes/Brassica_oleracea/GCF_000695525.1_BOL_genomic.fna"
+#     ["Mus_musculus"]="10090:/home/plstenge/genomes/Mus_musculus/Mus_musculus.GRCm39.dna.toplevel.fa"
+#     ["Prunus_dulcis"]="3755:/home/plstenge/genomes/Prunus_dulcis/CABIKO01.fasta"
+#     ["Olea_europaea"]="4146:/home/plstenge/genomes/Olea_europaea/CACTIH01.fasta"
+#     ["Ligustrum_vulgare"]="13597:/home/plstenge/genomes/Ligustrum_vulgare/GCA_963555705.1_daLigVulg1.1_genomic.fna"
+#     ["Salix_caprea"]="40685:/home/plstenge/genomes/Salix_caprea/GCA_964035475.1_ddSalCapr1.1_genomic.fna"
+#     ["Vitis_vinifera"]="29760:/storage/groups/gdec/shared_paleo/genomes_REF/12Xv2_grapevine_genome_assembly.fa"
+#     ["Homo_sapiens"]="9606:/home/plstenge/genomes/Homo_sapiens/GCF_000001405.40_GRCh38.p14_genomic.fna"
+#     ["Cannabis_sativa"]="3483:/home/plstenge/genomes/Cannabis_sativa/GCF_029168945.1_ASM2916894v1_genomic.fna"
+#     ["Brachypodium_distachyon"]="15367:/home/plstenge/genomes/Brachypodium_distachyon/GCF_000005505.3_Brachypodium_distachyon_v3.0_genomic.fna"
+#     ["Lotus_japonicus"]="34305:/home/plstenge/genomes/Lotus_japonicus/GCF_012489685.1_LjGifu_v1.2_genomic.fna"
+#     ["Rubus_caesius"]="75065:/home/plstenge/genomes/Rubus_caesius/GCA_964235055.1_drRubCaes1.hap1.1_genomic.fna"
+#     ["Mentha_longifolia"]="21819:/home/plstenge/genomes/Mentha_longifolia/GCA_052575335.1_ASM5257533v1_genomic.fna"
+#     ["Brassica_oleracea"]="3712:/home/plstenge/genomes/Brassica_oleracea/GCF_000695525.1_BOL_genomic.fna"
      ["Leontodon_hispidus"]="58660:/home/plstenge/genomes/Leontodon_hispidus/GCA_965240285.1_daLeoHisp1.hap1.1_genomic.fna"
-     ["Rosa_rugosa"]="74645:/home/plstenge/genomes/Rosa_rugosa/GCF_958449725.1_drRosRugo1.1_genomic.fna"
-     ["Fragaria_vesca"]="57918:/home/plstenge/genomes/Fragaria_vesca/GCF_000184155.1_FraVesHawaii_1.0_genomic.fna"
+#     ["Rosa_rugosa"]="74645:/home/plstenge/genomes/Rosa_rugosa/GCF_958449725.1_drRosRugo1.1_genomic.fna"
+#     ["Fragaria_vesca"]="57918:/home/plstenge/genomes/Fragaria_vesca/GCF_000184155.1_FraVesHawaii_1.0_genomic.fna"
      ["Humulus_lupulus"]="3486:/home/plstenge/genomes/Humulus_lupulus/GCF_963169125.1_drHumLupu1.1_genomic.fna"
-     ["Rosa_chinensis"]="74649:/home/plstenge/genomes/Rosa_chinensis/GCF_002994745.2_RchiOBHm-V2_genomic.fna"
-     ["Plantago_lanceolata"]="26867:/home/plstenge/genomes/Plantago_lanceolata/GCA_028659135.1_PL_genome_S119_genomic.fna"
-     ["Pinus_sylvestris"]="3337:/home/plstenge/genomes/Pinus_sylvestris/GCA_900143225.1_FinPunk_mtDNA_Assembly_genomic.fna"
+#     ["Rosa_chinensis"]="74649:/home/plstenge/genomes/Rosa_chinensis/GCF_002994745.2_RchiOBHm-V2_genomic.fna"
+#     ["Plantago_lanceolata"]="26867:/home/plstenge/genomes/Plantago_lanceolata/GCA_028659135.1_PL_genome_S119_genomic.fna"
+#     ["Pinus_sylvestris"]="3337:/home/plstenge/genomes/Pinus_sylvestris/GCA_900143225.1_FinPunk_mtDNA_Assembly_genomic.fna"
      ["Lolium_perenne"]="4522:/home/plstenge/genomes/Lolium_perenne/GCF_019359855.2_Kyuss_2.0_genomic.fna"
-     ["Triticum_timopheevii"]="4564:/storage/groups/gdec/shared_paleo/genomes_REF/TrTimopheevii.pseudomol-v0.3_genome.fa"
-     ["Triticum_spelta"]="4564:/storage/groups/gdec/shared_paleo/genomes_REF/Triticum_spelta.PGSBv2.genomeABS.fa"
-     ["Triticum_Svevo"]="4564:/storage/groups/gdec/shared_paleo/genomes_REF/160802_Svevo_v2_pseudomolecules.fasta"
-     ["Medicago_truncatula"]="880:/home/plstenge/genomes/Medicago_truncatula/GCF_003473485.1_MtrunA17r5.0-ANR_genomic.fna"
-     ["Calluna_vulgaris"]="13385:/home/plstenge/genomes/Calluna_vulgaris/GCA_964145215.1_ddCalVulg4.hap2.1_genomic.fna"
-     ["Ericales_Calluna"]="41945:/home/plstenge/genomes/Calluna_vulgaris/GCA_964145215.1_ddCalVulg4.hap2.1_genomic.fna"
-     ["Populus_trichocarpa"]="3689:/home/plstenge/genomes/Populus_trichocarpa/GCF_000002775.5_P.trichocarpa_v4.1_genomic.fna"
-     ["Prunella_vulgaris"]="39358:/home/plstenge/genomes/Prunella_vulgaris/GCA_044905855.1_ASM4490585v1_genomic.fna"
-     ["Fraxinus_excelsior"]="38873:/home/plstenge/genomes/Fraxinus_excelsior/GCA_965226085.2_daFraExce3.hap1.2_genomic.fna"
-     ["Ovis_aries"]="9940:/home/plstenge/genomes/Ovis_aries/Ovis_aries.ARS-UI_Ramb_v3.0.dna.toplevel.fa"
-     ["Capra_hircus"]="9925:/home/plstenge/genomes/Capra_hircus/Capra_hircus.ARS1.dna.toplevel.fa"
-     ["Corylus_avellana"]="13451:/home/plstenge/genomes/Corylus_avellana/Corylus_avellana_CavTom2PMs_1_0.fasta"
-     ["Alnus_glutinosa"]="3517:/home/plstenge/genomes/Alnus_glutinosa/Alnus_glutinosa_genome_assembly_dhAlnGlut1.fa"
-     ["Dryopteris_crassirhizoma"]="3287:/home/plstenge/genomes/Dryopteris_crassirhizoma/Dryopteris_crassirhizoma_mitochondrion.fna"
-     ["Bos_taurus"]="9903:/home/plstenge/genomes/Bos_taurus/GCF_002263795.3_ARS-UCD2.0_genomic.fna"
-     ["Phragmites_australis"]="29695:/home/plstenge/genomes/Phragmites_australis/Phragmites_australis_GCA_040373225.1.uniq.fa"
-     ["Populus_nigra"]="3689:/home/plstenge/genomes/Populus_nigra/CATOPT01.fasta"
-     ["Trifolium_pratense"]="3334059:/home/plstenge/genomes/Trifolium_pratense/FKJA01.fasta"
-     ["Malus_domestica"]="3749:/home/plstenge/genomes/Malus_domestica/GCF_042453785.1_GDT2T_hap1_genomic.fna"
-     ["Quercus_robur"]="3511:/home/plstenge/genomes/Quercus_robur/Qrob_PM1N.fa"
-     ["Daucus_carota"]="4039:/home/plstenge/genomes/Daucus_carota/LNRQ01.fasta"
+#     ["Triticum_timopheevii"]="4564:/storage/groups/gdec/shared_paleo/genomes_REF/TrTimopheevii.pseudomol-v0.3_genome.fa"
+#     ["Triticum_spelta"]="4564:/storage/groups/gdec/shared_paleo/genomes_REF/Triticum_spelta.PGSBv2.genomeABS.fa"
+#     ["Triticum_Svevo"]="4564:/storage/groups/gdec/shared_paleo/genomes_REF/160802_Svevo_v2_pseudomolecules.fasta"
+#     ["Medicago_truncatula"]="880:/home/plstenge/genomes/Medicago_truncatula/GCF_003473485.1_MtrunA17r5.0-ANR_genomic.fna"
+#     ["Calluna_vulgaris"]="13385:/home/plstenge/genomes/Calluna_vulgaris/GCA_964145215.1_ddCalVulg4.hap2.1_genomic.fna"
+#     ["Ericales_Calluna"]="41945:/home/plstenge/genomes/Calluna_vulgaris/GCA_964145215.1_ddCalVulg4.hap2.1_genomic.fna"
+#     ["Populus_trichocarpa"]="3689:/home/plstenge/genomes/Populus_trichocarpa/GCF_000002775.5_P.trichocarpa_v4.1_genomic.fna"
+#     ["Prunella_vulgaris"]="39358:/home/plstenge/genomes/Prunella_vulgaris/GCA_044905855.1_ASM4490585v1_genomic.fna"
+#     ["Fraxinus_excelsior"]="38873:/home/plstenge/genomes/Fraxinus_excelsior/GCA_965226085.2_daFraExce3.hap1.2_genomic.fna"
+#     ["Ovis_aries"]="9940:/home/plstenge/genomes/Ovis_aries/Ovis_aries.ARS-UI_Ramb_v3.0.dna.toplevel.fa"
+#     ["Capra_hircus"]="9925:/home/plstenge/genomes/Capra_hircus/Capra_hircus.ARS1.dna.toplevel.fa"
+#     ["Corylus_avellana"]="13451:/home/plstenge/genomes/Corylus_avellana/Corylus_avellana_CavTom2PMs_1_0.fasta"
+#     ["Alnus_glutinosa"]="3517:/home/plstenge/genomes/Alnus_glutinosa/Alnus_glutinosa_genome_assembly_dhAlnGlut1.fa"
+#     ["Dryopteris_crassirhizoma"]="3287:/home/plstenge/genomes/Dryopteris_crassirhizoma/Dryopteris_crassirhizoma_mitochondrion.fna"
+#     ["Bos_taurus"]="9903:/home/plstenge/genomes/Bos_taurus/GCF_002263795.3_ARS-UCD2.0_genomic.fna"
+#     ["Phragmites_australis"]="29695:/home/plstenge/genomes/Phragmites_australis/Phragmites_australis_GCA_040373225.1.uniq.fa"
+#     ["Populus_nigra"]="3689:/home/plstenge/genomes/Populus_nigra/CATOPT01.fasta"
+#     ["Trifolium_pratense"]="3334059:/home/plstenge/genomes/Trifolium_pratense/FKJA01.fasta"
+#     ["Malus_domestica"]="3749:/home/plstenge/genomes/Malus_domestica/GCF_042453785.1_GDT2T_hap1_genomic.fna"
+#     ["Quercus_robur"]="3511:/home/plstenge/genomes/Quercus_robur/Qrob_PM1N.fa"
+#     ["Daucus_carota"]="4039:/home/plstenge/genomes/Daucus_carota/LNRQ01.fasta"
 )
 
 echo ""
@@ -306,200 +306,200 @@ for sp in "${!VALID_GENOMES[@]}"; do
 done
 echo ""
 
-################################################################################
-# PHASE 2 : MAPPINGS - UNMERGED READS (PAIRED-END)
-################################################################################
-
-shopt -s nullglob
-echo ""
-echo "=========================================="
-echo "PHASE 2: Analyse UNMERGED READS (Paired-End) - MapDamage"
-echo "=========================================="
-echo ""
-
-if [[ -d "$KRAKEN_UNMERGED" ]] && ls "$KRAKEN_UNMERGED"/*.kraken >/dev/null 2>&1; then
-    for KRAKEN_FILE in "$KRAKEN_UNMERGED"/*.kraken; do
-        KRAKEN_BASE=$(basename "$KRAKEN_FILE" .kraken)
-        SAMPLE="${KRAKEN_BASE%_unmerged}"
-
-        R1="${FINAL_UNMERGED_DIR}/${SAMPLE}_final_unmerged_R1.fastq.gz"
-        R2="${FINAL_UNMERGED_DIR}/${SAMPLE}_final_unmerged_R2.fastq.gz"
-
-        if [[ ! -f "$R1" || ! -f "$R2" || ! -s "$R1" || ! -s "$R2" ]]; then
-            echo ""
-            echo "⚠ Fichiers unmerged manquants ou vides pour $SAMPLE"
-            continue
-        fi
-
-        echo ""
-        echo "┌─────────────────────────────────────────"
-        echo "│ ${SAMPLE} (unmerged - $(ls -lh $R1 | awk '{print $5}') + $(ls -lh $R2 | awk '{print $5}'))"
-        echo "└─────────────────────────────────────────"
-
-        for GROUP in "${!VALID_GENOMES[@]}"; do
-            REF="${VALID_GENOMES[$GROUP]}"
-            TAX_ID="${TAXONS[$GROUP]%:*}"
-
-            if [[ -z "$REF" || ! -f "$REF" ]]; then
-                echo " ⚠ Génome non disponible pour ${GROUP}"
-                continue
-            fi
-
-            OUTDIR="${DAMAGE_UNMERGED_BASE}/${GROUP}/paired_end"
-            mkdir -p "$OUTDIR"
-            OUT_R1="${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R1.fastq"
-            OUT_R2="${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R2.fastq"
-
-            echo ""
-            echo " → ${GROUP} (TaxID: ${TAX_ID})"
-            echo " Extraction reads paired-end..."
-
-            python3 "${KRAKENTOOLS_DIR}/extract_kraken_reads.py" \
-                -k "$KRAKEN_FILE" \
-                -s "$R1" -s2 "$R2" \
-                -t "$TAX_ID" \
-                -o "$OUT_R1" -o2 "$OUT_R2" \
-                --fastq-output 2>>"$LOGFILE"
-
-            if [[ ! -f "$OUT_R1" || ! -f "$OUT_R2" || ! -s "$OUT_R1" || ! -s "$OUT_R2" ]]; then
-                echo " ⚠ Aucun read extrait pour ${GROUP}"
-                rm -f "$OUT_R1" "$OUT_R2" 2>/dev/null
-                continue
-            fi
-
-            READ_COUNT=$(grep -c "^@" "$OUT_R1" 2>/dev/null || echo 0)
-            echo " ✓ ${READ_COUNT} paires extraites"
-
-            echo " Mapping BWA paired-end..."
-
-            bwa aln -n 0.08 -l 24 -k 2 -q 20 -t 4 "$REF" "$OUT_R1" \
-                > "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R1.sai" 2>>"$LOGFILE"
-
-            bwa aln -n 0.08 -l 24 -k 2 -q 20 -t 4 "$REF" "$OUT_R2" \
-                > "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R2.sai" 2>>"$LOGFILE"
-
-            bwa sampe "$REF" \
-                "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R1.sai" \
-                "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R2.sai" \
-                "$OUT_R1" "$OUT_R2" 2>>"$LOGFILE" | \
-                samtools view -bS - 2>>"$LOGFILE" | \
-                samtools sort -o "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" - 2>>"$LOGFILE"
-
-            if [[ ! -f "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" ]]; then
-                echo " ✗ Erreur lors du mapping"
-                continue
-            fi
-
-            samtools index "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" 2>>"$LOGFILE"
-            echo " ✓ Mapping terminé"
-
-            calculate_mapping_rate "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" "$SAMPLE" "$GROUP" "unmerged_PE" "$MAPPING_INFO_UNMERGED"
-
-            run_mapdamage_with_length_dist \
-                "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" \
-                "$REF" \
-                "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_mapDamage" \
-                "paired"
-
-            rm -f "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R1.sai" \
-                  "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R2.sai" \
-                  "$OUT_R1" "$OUT_R2"
-        done
-    done
-else
-    echo "✗ ERREUR: Aucun fichier .kraken trouvé dans ${KRAKEN_UNMERGED}"
-    exit 1
-fi
-
-################################################################################
-# PHASE 3 : ANALYSE SINGLE-END R1 (UNMERGED) POUR DISTRIBUTION DE LONGUEURS
-################################################################################
-
-echo ""
-echo "=========================================="
-echo "PHASE 3: Analyse UNMERGED R1 (Single-End) - pour distributions de longueurs"
-echo "=========================================="
-echo ""
-
-if [[ -d "$KRAKEN_UNMERGED" ]] && ls "$KRAKEN_UNMERGED"/*.kraken >/dev/null 2>&1; then
-    for KRAKEN_FILE in "$KRAKEN_UNMERGED"/*.kraken; do
-        KRAKEN_BASE=$(basename "$KRAKEN_FILE" .kraken)
-        SAMPLE="${KRAKEN_BASE%_unmerged}"
-
-        R1="${FINAL_UNMERGED_DIR}/${SAMPLE}_final_unmerged_R1.fastq.gz"
-
-        if [[ ! -f "$R1" || ! -s "$R1" ]]; then
-            continue
-        fi
-
-        echo ""
-        echo "┌─────────────────────────────────────────"
-        echo "│ ${SAMPLE} (R1 only - $(ls -lh $R1 | awk '{print $5}'))"
-        echo "└─────────────────────────────────────────"
-
-        for GROUP in "${!VALID_GENOMES[@]}"; do
-            REF="${VALID_GENOMES[$GROUP]}"
-            TAX_ID="${TAXONS[$GROUP]%:*}"
-
-            if [[ -z "$REF" || ! -f "$REF" ]]; then
-                continue
-            fi
-
-            OUTDIR="${DAMAGE_UNMERGED_BASE}/${GROUP}/single_end_R1"
-            mkdir -p "$OUTDIR"
-            OUT_R1="${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R1.fastq"
-
-            echo ""
-            echo " → ${GROUP} (Single-end R1)"
-            echo " Extraction R1 uniquement..."
-
-            python3 "${KRAKENTOOLS_DIR}/extract_kraken_reads.py" \
-                -k "$KRAKEN_FILE" \
-                -s "$R1" \
-                -t "$TAX_ID" \
-                -o "$OUT_R1" \
-                --fastq-output 2>>"$LOGFILE"
-
-            if [[ ! -f "$OUT_R1" || ! -s "$OUT_R1" ]]; then
-                echo " ⚠ Aucun read extrait pour ${GROUP}"
-                rm -f "$OUT_R1" 2>/dev/null
-                continue
-            fi
-
-            READ_COUNT=$(grep -c "^@" "$OUT_R1" 2>/dev/null || echo 0)
-            echo " ✓ ${READ_COUNT} reads extraits"
-
-            echo " Mapping BWA single-end..."
-
-            bwa aln -n 0.08 -l 24 -k 2 -q 20 -t 4 "$REF" "$OUT_R1" \
-                > "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R1.sai" 2>>"$LOGFILE"
-
-            bwa samse "$REF" \
-                "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R1.sai" \
-                "$OUT_R1" 2>>"$LOGFILE" | \
-                samtools view -bS - 2>>"$LOGFILE" | \
-                samtools sort -o "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" - 2>>"$LOGFILE"
-
-            if [[ ! -f "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" ]]; then
-                echo " ✗ Erreur lors du mapping"
-                continue
-            fi
-
-            samtools index "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" 2>>"$LOGFILE"
-            echo " ✓ Mapping terminé"
-
-            calculate_mapping_rate "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" "$SAMPLE" "$GROUP" "unmerged_SE_R1" "$MAPPING_INFO_UNMERGED"
-
-            run_mapdamage_with_length_dist \
-                "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" \
-                "$REF" \
-                "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_mapDamage" \
-                "single"
-
-            rm -f "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R1.sai" "$OUT_R1"
-        done
-    done
-fi
+#################################################################################
+## PHASE 2 : MAPPINGS - UNMERGED READS (PAIRED-END)
+#################################################################################
+#
+#shopt -s nullglob
+#echo ""
+#echo "=========================================="
+#echo "PHASE 2: Analyse UNMERGED READS (Paired-End) - MapDamage"
+#echo "=========================================="
+#echo ""
+#
+#if [[ -d "$KRAKEN_UNMERGED" ]] && ls "$KRAKEN_UNMERGED"/*.kraken >/dev/null 2>&1; then
+#    for KRAKEN_FILE in "$KRAKEN_UNMERGED"/*.kraken; do
+#        KRAKEN_BASE=$(basename "$KRAKEN_FILE" .kraken)
+#        SAMPLE="${KRAKEN_BASE%_unmerged}"
+#
+#        R1="${FINAL_UNMERGED_DIR}/${SAMPLE}_final_unmerged_R1.fastq.gz"
+#        R2="${FINAL_UNMERGED_DIR}/${SAMPLE}_final_unmerged_R2.fastq.gz"
+#
+#        if [[ ! -f "$R1" || ! -f "$R2" || ! -s "$R1" || ! -s "$R2" ]]; then
+#            echo ""
+#            echo "⚠ Fichiers unmerged manquants ou vides pour $SAMPLE"
+#            continue
+#        fi
+#
+#        echo ""
+#        echo "┌─────────────────────────────────────────"
+#        echo "│ ${SAMPLE} (unmerged - $(ls -lh $R1 | awk '{print $5}') + $(ls -lh $R2 | awk '{print $5}'))"
+#        echo "└─────────────────────────────────────────"
+#
+#        for GROUP in "${!VALID_GENOMES[@]}"; do
+#            REF="${VALID_GENOMES[$GROUP]}"
+#            TAX_ID="${TAXONS[$GROUP]%:*}"
+#
+#            if [[ -z "$REF" || ! -f "$REF" ]]; then
+#                echo " ⚠ Génome non disponible pour ${GROUP}"
+#                continue
+#            fi
+#
+#            OUTDIR="${DAMAGE_UNMERGED_BASE}/${GROUP}/paired_end"
+#            mkdir -p "$OUTDIR"
+#            OUT_R1="${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R1.fastq"
+#            OUT_R2="${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R2.fastq"
+#
+#            echo ""
+#            echo " → ${GROUP} (TaxID: ${TAX_ID})"
+#            echo " Extraction reads paired-end..."
+#
+#            python3 "${KRAKENTOOLS_DIR}/extract_kraken_reads.py" \
+#                -k "$KRAKEN_FILE" \
+#                -s "$R1" -s2 "$R2" \
+#                -t "$TAX_ID" \
+#                -o "$OUT_R1" -o2 "$OUT_R2" \
+#                --fastq-output 2>>"$LOGFILE"
+#
+#            if [[ ! -f "$OUT_R1" || ! -f "$OUT_R2" || ! -s "$OUT_R1" || ! -s "$OUT_R2" ]]; then
+#                echo " ⚠ Aucun read extrait pour ${GROUP}"
+#                rm -f "$OUT_R1" "$OUT_R2" 2>/dev/null
+#                continue
+#            fi
+#
+#            READ_COUNT=$(grep -c "^@" "$OUT_R1" 2>/dev/null || echo 0)
+#            echo " ✓ ${READ_COUNT} paires extraites"
+#
+#            echo " Mapping BWA paired-end..."
+#
+#            bwa aln -n 0.08 -l 24 -k 2 -q 20 -t 4 "$REF" "$OUT_R1" \
+#                > "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R1.sai" 2>>"$LOGFILE"
+#
+#            bwa aln -n 0.08 -l 24 -k 2 -q 20 -t 4 "$REF" "$OUT_R2" \
+#                > "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R2.sai" 2>>"$LOGFILE"
+#
+#            bwa sampe "$REF" \
+#                "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R1.sai" \
+#                "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R2.sai" \
+#                "$OUT_R1" "$OUT_R2" 2>>"$LOGFILE" | \
+#                samtools view -bS - 2>>"$LOGFILE" | \
+#                samtools sort -o "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" - 2>>"$LOGFILE"
+#
+#            if [[ ! -f "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" ]]; then
+#                echo " ✗ Erreur lors du mapping"
+#                continue
+#            fi
+#
+#            samtools index "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" 2>>"$LOGFILE"
+#            echo " ✓ Mapping terminé"
+#
+#            calculate_mapping_rate "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" "$SAMPLE" "$GROUP" "unmerged_PE" "$MAPPING_INFO_UNMERGED"
+#
+#            run_mapdamage_with_length_dist \
+#                "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" \
+#                "$REF" \
+#                "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_mapDamage" \
+#                "paired"
+#
+#            rm -f "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R1.sai" \
+#                  "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R2.sai" \
+#                  "$OUT_R1" "$OUT_R2"
+#        done
+#    done
+#else
+#    echo "✗ ERREUR: Aucun fichier .kraken trouvé dans ${KRAKEN_UNMERGED}"
+#    exit 1
+#fi
+#
+#################################################################################
+## PHASE 3 : ANALYSE SINGLE-END R1 (UNMERGED) POUR DISTRIBUTION DE LONGUEURS
+#################################################################################
+#
+#echo ""
+#echo "=========================================="
+#echo "PHASE 3: Analyse UNMERGED R1 (Single-End) - pour distributions de longueurs"
+#echo "=========================================="
+#echo ""
+#
+#if [[ -d "$KRAKEN_UNMERGED" ]] && ls "$KRAKEN_UNMERGED"/*.kraken >/dev/null 2>&1; then
+#    for KRAKEN_FILE in "$KRAKEN_UNMERGED"/*.kraken; do
+#        KRAKEN_BASE=$(basename "$KRAKEN_FILE" .kraken)
+#        SAMPLE="${KRAKEN_BASE%_unmerged}"
+#
+#        R1="${FINAL_UNMERGED_DIR}/${SAMPLE}_final_unmerged_R1.fastq.gz"
+#
+#        if [[ ! -f "$R1" || ! -s "$R1" ]]; then
+#            continue
+#        fi
+#
+#        echo ""
+#        echo "┌─────────────────────────────────────────"
+#        echo "│ ${SAMPLE} (R1 only - $(ls -lh $R1 | awk '{print $5}'))"
+#        echo "└─────────────────────────────────────────"
+#
+#        for GROUP in "${!VALID_GENOMES[@]}"; do
+#            REF="${VALID_GENOMES[$GROUP]}"
+#            TAX_ID="${TAXONS[$GROUP]%:*}"
+#
+#            if [[ -z "$REF" || ! -f "$REF" ]]; then
+#                continue
+#            fi
+#
+#            OUTDIR="${DAMAGE_UNMERGED_BASE}/${GROUP}/single_end_R1"
+#            mkdir -p "$OUTDIR"
+#            OUT_R1="${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R1.fastq"
+#
+#            echo ""
+#            echo " → ${GROUP} (Single-end R1)"
+#            echo " Extraction R1 uniquement..."
+#
+#            python3 "${KRAKENTOOLS_DIR}/extract_kraken_reads.py" \
+#                -k "$KRAKEN_FILE" \
+#                -s "$R1" \
+#                -t "$TAX_ID" \
+#                -o "$OUT_R1" \
+#                --fastq-output 2>>"$LOGFILE"
+#
+#            if [[ ! -f "$OUT_R1" || ! -s "$OUT_R1" ]]; then
+#                echo " ⚠ Aucun read extrait pour ${GROUP}"
+#                rm -f "$OUT_R1" 2>/dev/null
+#                continue
+#            fi
+#
+#            READ_COUNT=$(grep -c "^@" "$OUT_R1" 2>/dev/null || echo 0)
+#            echo " ✓ ${READ_COUNT} reads extraits"
+#
+#            echo " Mapping BWA single-end..."
+#
+#            bwa aln -n 0.08 -l 24 -k 2 -q 20 -t 4 "$REF" "$OUT_R1" \
+#                > "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R1.sai" 2>>"$LOGFILE"
+#
+#            bwa samse "$REF" \
+#                "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R1.sai" \
+#                "$OUT_R1" 2>>"$LOGFILE" | \
+#                samtools view -bS - 2>>"$LOGFILE" | \
+#                samtools sort -o "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" - 2>>"$LOGFILE"
+#
+#            if [[ ! -f "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" ]]; then
+#                echo " ✗ Erreur lors du mapping"
+#                continue
+#            fi
+#
+#            samtools index "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" 2>>"$LOGFILE"
+#            echo " ✓ Mapping terminé"
+#
+#            calculate_mapping_rate "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" "$SAMPLE" "$GROUP" "unmerged_SE_R1" "$MAPPING_INFO_UNMERGED"
+#
+#            run_mapdamage_with_length_dist \
+#                "${OUTDIR}/${KRAKEN_BASE}_${GROUP}.sorted.bam" \
+#                "$REF" \
+#                "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_mapDamage" \
+#                "single"
+#
+#            rm -f "${OUTDIR}/${KRAKEN_BASE}_${GROUP}_R1.sai" "$OUT_R1"
+#        done
+#    done
+#fi
 
 ################################################################################
 # PHASE 4 : ANALYSE MERGED (SINGLE-END)
