@@ -54,7 +54,7 @@ declare -A MODERN_GENOMES=(
 
 THREADS=16
 
-mkdir -p $OUT_DIR/{01_indexed_genomes,02_consensus,03_vcf,04_merged,05_analysis,06_bam_merged}
+mkdir -p $OUT_DIR/{01_indexed_genomes,02_consensus,03_vcf,04_merged,05_analysis}
 
 echo "=========================================="
 echo "PHYLOGÉNIE CHR1 (ANCIENTS MERGED+UNMERGED + MODERNES)"
@@ -63,36 +63,34 @@ echo "Anciens: ${#ANCIENT_SAMPLES[@]} coprolites"
 echo "Modernes: ${#MODERN_GENOMES[@]} génomes de référence"
 echo "=========================================="
 
-# ========== ÉTAPE 0 : Merge UNMERGED + MERGED par coprolite ==========
+# ========== ÉTAPE 0 : Merge UNMERGED + MERGED par coprolite (FORCÉ) ==========
 echo ""
-echo "ÉTAPE 0: Merge BAM unmerged + merged par coprolite"
+echo "ÉTAPE 0: Merge BAM unmerged + merged par coprolite (recalcul forcé)"
 echo "----------------------------------------"
+
+# On supprime tout le dossier des BAM mergés pour repartir propre
+rm -rf "${OUT_DIR}/06_bam_merged"
+mkdir -p "${OUT_DIR}/06_bam_merged"
 
 for SAMPLE in "${ANCIENT_SAMPLES[@]}"; do
     UNMERGED_BAM="${ANCIENT_UNMERGED_DIR}/${SAMPLE}_unmerged_Ovis_aries.sorted.bam"
     MERGED_BAM="${ANCIENT_MERGED_DIR}/${SAMPLE}_merged_Ovis_aries_merged.sorted.bam"
     OUT_BAM="${OUT_DIR}/06_bam_merged/${SAMPLE}_merged_unmerged_Ovis_aries.sorted.bam"
 
-    mkdir -p "${OUT_DIR}/06_bam_merged"
+    echo "  $SAMPLE: merge unmerged + merged..."
 
-    if [[ -f "$OUT_BAM" ]]; then
-        echo "  $SAMPLE: BAM merged déjà présent"
-    else
-        echo "  $SAMPLE: merge unmerged + merged..."
-
-        if [[ ! -f "$UNMERGED_BAM" ]]; then
-            echo "    ⚠️  UNMERGED manquant: $UNMERGED_BAM"
-        fi
-        if [[ ! -f "$MERGED_BAM" ]]; then
-            echo "    ⚠️  MERGED manquant: $MERGED_BAM"
-        fi
-
-        samtools merge -@ $THREADS -f "$OUT_BAM" \
-            $( [[ -f "$UNMERGED_BAM" ]] && echo "$UNMERGED_BAM" ) \
-            $( [[ -f "$MERGED_BAM" ]] && echo "$MERGED_BAM" )
-
-        samtools index "$OUT_BAM"
+    if [[ ! -f "$UNMERGED_BAM" ]]; then
+        echo "    ⚠️  UNMERGED manquant: $UNMERGED_BAM"
     fi
+    if [[ ! -f "$MERGED_BAM" ]]; then
+        echo "    ⚠️  MERGED manquant: $MERGED_BAM"
+    fi
+
+    samtools merge -@ $THREADS -f "$OUT_BAM" \
+        $( [[ -f "$UNMERGED_BAM" ]] && echo "$UNMERGED_BAM" ) \
+        $( [[ -f "$MERGED_BAM" ]] && echo "$MERGED_BAM" )
+
+    samtools index "$OUT_BAM"
 
     N_READS=$(samtools view -c "$OUT_BAM")
     echo "    → $N_READS reads dans BAM merged"
@@ -133,6 +131,8 @@ echo ""
 echo "ÉTAPE 2: Génération des consensus modernes (CHR1)"
 echo "----------------------------------------"
 echo "  Stratégie: extraction du contig correspondant à chr1"
+
+mkdir -p "${OUT_DIR}/02_consensus"
 
 for NAME in "${!MODERN_GENOMES[@]}"; do
     GENOME_PATH="${MODERN_GENOMES_DIR}/${MODERN_GENOMES[$NAME]}"
@@ -176,16 +176,8 @@ echo "ÉTAPE 3: SNP calling échantillons anciens (CHR1, merged+unmerged)"
 echo "----------------------------------------"
 echo "  ⚠️  Recalcul forcé : suppression des VCF anciens"
 
+rm -rf "${OUT_DIR}/03_vcf"
 mkdir -p "${OUT_DIR}/03_vcf"
-
-for SAMPLE in "${ANCIENT_SAMPLES[@]}"; do
-    VCF="${OUT_DIR}/03_vcf/${SAMPLE}.vcf.gz"
-    VCF_INDEX="${VCF}.csi"
-    if [[ -f "$VCF" ]]; then
-        echo "  Suppression ancien VCF: $VCF"
-        rm -f "$VCF" "$VCF_INDEX"
-    fi
-done
 
 for SAMPLE in "${ANCIENT_SAMPLES[@]}"; do
     BAM="${OUT_DIR}/06_bam_merged/${SAMPLE}_merged_unmerged_Ovis_aries.sorted.bam"
