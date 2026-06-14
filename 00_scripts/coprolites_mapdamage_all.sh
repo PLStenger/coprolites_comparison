@@ -114,7 +114,6 @@ echo -e "Sample\tSpecies\tType\tTotal_Reads\tMapped_Reads\tMapping_Rate(%)" > "$
 echo "$(date): Script MapDamage UNMERGED + MERGED démarré" | tee -a "$LOGFILE"
 
 # ========== GÉNOMES DE RÉFÉRENCE - CONFIGURATION ==========
-# Même logique que dans ta nouvelle version pipeline.sh : TAXID:chemin_fixed.fa
 declare -A TAXONS=(
 #     ["Mus_musculus"]="10090:/home/plstenge/genomes/Mus_musculus/Mus_musculus.GRCm39.dna.toplevel.fa"
 #     ["Prunus_dulcis"]="3755:/home/plstenge/genomes/Prunus_dulcis/CABIKO01.fasta"
