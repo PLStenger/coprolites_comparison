@@ -19,7 +19,7 @@
 #   5. Run MultiQC on both raw and grouped FastQC outputs
 # ==============================================================================
 
-set -euo pipefail
+# set -euo pipefail
 
 # ==============================================================================
 # ENVIRONMENT SETUP
