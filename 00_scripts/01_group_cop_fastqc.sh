@@ -4,7 +4,7 @@
 #SBATCH --ntasks=1
 #SBATCH -p smp
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=700G
+#SBATCH --mem=1000G
 #SBATCH --mail-user=pierrelouis.stenger@gmail.com
 #SBATCH --mail-type=ALL
 #SBATCH --error="/home/plstenge/coprolites_comparison/00_scripts/01_group_cop_files.err"
