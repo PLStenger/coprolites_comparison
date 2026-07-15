@@ -4,22 +4,22 @@
 #SBATCH --ntasks=1
 #SBATCH -p smp
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=64G
+#SBATCH --mem=700G
 #SBATCH --mail-user=pierrelouis.stenger@gmail.com
 #SBATCH --mail-type=ALL
 #SBATCH --error="/home/plstenge/coprolites_comparison/00_scripts/01_group_cop_files.err"
 #SBATCH --output="/home/plstenge/coprolites_comparison/00_scripts/01_group_cop_files.out"
 
 # ==============================================================================
-# Script  : 01_group_cop_fastqc.sh
-# Author  : Pierre-Louis Stenger
+# Script : 01_group_cop_fastqc.sh
+# Author : Pierre-Louis Stenger
 # Purpose :
-#   1. Concatenate (cat) R1 and R2 reads per sample across all sequencing runs
-#   2. Run FastQC on the original RUN1 FASTQ files (before grouping)
-#   3. Run FastQC on each per-run file (RUN2–RUN5)
-#   4. Run FastQC on the grouped (concatenated) files
-#   5. Run MultiQC on raw FastQC outputs
-#   6. Run MultiQC on grouped FastQC outputs
+# 1. Concatenate (cat) R1 and R2 reads per sample across all sequencing runs
+#    (RUN1 inclus — structure flat : fichiers directement dans le dossier)
+# 2. Run FastQC sur chaque fichier FASTQ individuel, par run et par échantillon
+# 3. Run MultiQC par échantillon et par run
+# 4. Run FastQC sur les fichiers groupés (concaténés)
+# 5. Run MultiQC sur les fichiers groupés
 # ==============================================================================
 
 # set -euo pipefail
@@ -36,18 +36,21 @@ conda activate bioinformatic
 # PATHS — Input run directories
 # ==============================================================================
 
-# RUN1: flat structure — files directly in the folder
-#   Pattern: cop408_R1.fastq.gz
-RUN1="/home/plstenge/coprolites_comparison/01_raw_data/Lot1_Illumina_R1"
+# RUN1: structure plate — fichiers directement dans le dossier
+# Pattern: cop408_R1.fastq.gz  (pas de sous-dossier numéroté)
+RUN1="/storage/groups/gdec/shared_paleo/Illumina/01_raw_data"
 
-# RUN2–RUN5: subdirectory structure — files inside subfolders like 474_cop408/
-#   Pattern: 474_cop408/474_cop408_R1.fastq.gz
+# RUN2–RUN5: structure sous-dossier — fichiers dans 474_cop408/ etc.
+# Pattern: 474_cop408/474_cop408_R1.fastq.gz
 RUN2="/storage/groups/gdec/shared_paleo/E1531_final/run1_20250320_AV241601_E1531_Ps5Lane1_Ps6Lane2"
 RUN3="/storage/groups/gdec/shared_paleo/E1531_final/run2_20250414_AV241601_E1531_Ps5_Ps6_11022026_CORRECTED"
 RUN4="/storage/groups/gdec/shared_paleo/E1531_final/run3_20251008_AV241601_E1531_Ps7_Ps8"
 RUN5="/storage/groups/gdec/shared_paleo/E1531_final/run4_20251104_AV241601_E1531_Ps7_Ps8_04112025"
 
-# All run directories as an array (used for looping)
+# Labels humains pour chaque run (utilisés dans les noms de dossiers MultiQC)
+RUN_LABELS=("RUN1" "RUN2" "RUN3" "RUN4" "RUN5")
+
+# Tableau des chemins dans le même ordre que RUN_LABELS
 ALL_RUNS=("${RUN1}" "${RUN2}" "${RUN3}" "${RUN4}" "${RUN5}")
 
 # ==============================================================================
@@ -56,61 +59,54 @@ ALL_RUNS=("${RUN1}" "${RUN2}" "${RUN3}" "${RUN4}" "${RUN5}")
 
 WORKDIR="/home/plstenge/coprolites_comparison"
 
-# Directory where concatenated grouped FASTQ files will be written
+# Répertoire des fichiers FASTQ concaténés
 GROUPED_DIR="${WORKDIR}/01_raw_data/grouped"
 
-# FastQC output directory for raw per-run files
+# FastQC par séquence individuelle (un rapport par fichier FASTQ, par run)
 FASTQC_RAW_DIR="${WORKDIR}/02_quality_check_raw/fastqc_per_run"
 
-# FastQC output directory for grouped/concatenated files
+# FastQC sur les fichiers groupés
 FASTQC_GROUPED_DIR="${WORKDIR}/02_quality_check_raw/fastqc_grouped"
 
-# MultiQC output directory for raw FastQC results
+# MultiQC par échantillon × run (sous-dossier par combinaison)
 MULTIQC_RAW_DIR="${WORKDIR}/02_quality_check_raw/multiqc_per_run"
 
-# MultiQC output directory for grouped FastQC results
+# MultiQC sur les fichiers groupés
 MULTIQC_GROUPED_DIR="${WORKDIR}/02_quality_check_raw/multiqc_grouped"
 
-# Number of CPU threads available to FastQC
-# Must match --cpus-per-task in the SLURM header
+# Threads FastQC
 THREADS="${SLURM_CPUS_PER_TASK:-8}"
 
 # ==============================================================================
 # SAMPLES
+# Nom court de l'échantillon tel qu'il apparaît dans le nom de fichier
 # ==============================================================================
 
 SAMPLES=("cop408" "cop410" "cop412" "cop414" "cop417")
 
 # ==============================================================================
-# HELPER FUNCTION
-# Finds the FASTQ file for a given sample and read direction (R1 or R2)
-# within a run directory, handling both flat and one-level subdirectory
-# structures (maxdepth 2).
-#
-# Usage  : find_fastq <run_dir> <sample_id> <R1|R2>
-# Returns: full path to the matching file, or empty string if not found
+# HELPER FUNCTION : find_fastq
+# Cherche un fichier FASTQ pour un échantillon et un sens de lecture donnés
+# dans un répertoire run (structure plate ou 1 niveau de sous-dossier).
+# Retourne le chemin complet, ou chaîne vide si non trouvé.
 # ==============================================================================
 
 find_fastq() {
     local run_dir="$1"
     local sample="$2"   # e.g. "cop408"
-    local read="$3"     # "R1" or "R2"
+    local read="$3"     # "R1" ou "R2"
 
     find "${run_dir}" -maxdepth 2 -type f \
         -name "*${sample}*${read}*.fastq.gz" \
         2>/dev/null | head -n 1
 }
 
-# NOTE: The closing brace above is mandatory.
-# Without it, bash treats everything below as part of the function body
-# and none of the steps below would ever execute.
-
 # ==============================================================================
-# STEP 0: Create output directories
+# STEP 0 : Créer les répertoires de sortie
 # ==============================================================================
 
 echo "======================================================================="
-echo "  STEP 0: Creating output directories"
+echo " STEP 0: Creating output directories"
 echo "======================================================================="
 
 mkdir -p "${GROUPED_DIR}"
@@ -119,14 +115,20 @@ mkdir -p "${FASTQC_GROUPED_DIR}"
 mkdir -p "${MULTIQC_RAW_DIR}"
 mkdir -p "${MULTIQC_GROUPED_DIR}"
 
-echo "  Done."
+echo " Done."
 
 # ==============================================================================
-# STEP 1: Concatenate FASTQ files per sample across all runs
+# STEP 1 : Concaténation des FASTQ par échantillon à travers tous les runs
+#
+# Principe :
+#   - Pour chaque échantillon, on cherche ses fichiers R1/R2 dans chacun des
+#     5 runs (RUN1 compris, avec sa structure plate).
+#   - On cat tous les fichiers trouvés dans un seul fichier groupé.
+#   - Un echo final confirme la fin de la concaténation pour cet échantillon.
 # ==============================================================================
 
 echo "======================================================================="
-echo "  STEP 1: Concatenating FASTQ files per sample across all runs"
+echo " STEP 1: Concatenating FASTQ files per sample across all runs (RUN1–RUN5)"
 echo "======================================================================="
 
 for SAMPLE in "${SAMPLES[@]}"; do
@@ -134,99 +136,158 @@ for SAMPLE in "${SAMPLES[@]}"; do
     echo ""
     echo "  Sample: ${SAMPLE}"
 
-    # Collect R1 and R2 file paths found in each run
     R1_FILES=()
     R2_FILES=()
 
-    for RUN_DIR in "${ALL_RUNS[@]}"; do
+    for i in "${!ALL_RUNS[@]}"; do
+        RUN_DIR="${ALL_RUNS[$i]}"
+        RUN_LABEL="${RUN_LABELS[$i]}"
 
         r1=$(find_fastq "${RUN_DIR}" "${SAMPLE}" "R1")
         r2=$(find_fastq "${RUN_DIR}" "${SAMPLE}" "R2")
 
         if [[ -n "${r1}" && -n "${r2}" ]]; then
-            echo "    [FOUND] ${RUN_DIR}"
+            echo "    [FOUND] ${RUN_LABEL} : ${RUN_DIR}"
             echo "      R1 : ${r1}"
             echo "      R2 : ${r2}"
             R1_FILES+=("${r1}")
             R2_FILES+=("${r2}")
         else
-            echo "    [SKIP]  ${RUN_DIR} — ${SAMPLE} not present"
+            echo "    [SKIP]  ${RUN_LABEL} : ${SAMPLE} non présent"
         fi
-
     done
 
-    # Skip the sample if no files were found in any run
     if [[ ${#R1_FILES[@]} -eq 0 ]]; then
-        echo "  WARNING: ${SAMPLE} — no files found in any run. Skipping."
+        echo "    WARNING: ${SAMPLE} — aucun fichier trouvé dans aucun run. Ignoré."
         continue
     fi
 
-    # Define output file paths for the concatenated grouped files
     OUT_R1="${GROUPED_DIR}/${SAMPLE}_grouped_R1.fastq.gz"
     OUT_R2="${GROUPED_DIR}/${SAMPLE}_grouped_R2.fastq.gz"
 
-    # Concatenate all R1 files for this sample into a single grouped file
-    echo "    Concatenating ${#R1_FILES[@]} R1 file(s) -> ${OUT_R1}"
+    echo "    Concaténation de ${#R1_FILES[@]} fichier(s) R1 -> ${OUT_R1}"
     cat "${R1_FILES[@]}" > "${OUT_R1}"
 
-    # Concatenate all R2 files for this sample into a single grouped file
-    echo "    Concatenating ${#R2_FILES[@]} R2 file(s) -> ${OUT_R2}"
+    echo "    Concaténation de ${#R2_FILES[@]} fichier(s) R2 -> ${OUT_R2}"
     cat "${R2_FILES[@]}" > "${OUT_R2}"
 
-    echo "    Done: ${SAMPLE} grouped files written."
+    echo "    >>> CONCATENATION TERMINEE pour ${SAMPLE} <<<"
 
 done
 
 echo ""
-echo "  STEP 1 done. Grouped FASTQ files are in: ${GROUPED_DIR}"
+echo " STEP 1 done. Fichiers groupés dans : ${GROUPED_DIR}"
+echo " >>> TOUTES LES CONCATENATIONS SONT TERMINEES — vous pouvez lancer des analyses en parallèle sur ${GROUPED_DIR} <<<"
 
 # ==============================================================================
-# STEP 2: FastQC on all raw per-run FASTQ files
-# FastQC is run in batch mode: all matching files are passed at once to a
-# single FastQC call per run, which is faster than one call per file.
+# STEP 2 : FastQC sur chaque fichier FASTQ individuel, par run et par échantillon
+#
+# Principe :
+#   - Pour chaque run et chaque échantillon, on cherche les fichiers R1 et R2.
+#   - On lance un FastQC INDIVIDUEL sur chaque fichier (pas en batch).
+#     Cela donne un rapport par fichier, ex :
+#       fastqc_per_run/RUN1/cop408/cop408_R1_fastqc.html
+#       fastqc_per_run/RUN1/cop408/cop408_R2_fastqc.html
+#   - On range les résultats dans un sous-dossier par run/échantillon.
 # ==============================================================================
 
 echo "======================================================================="
-echo "  STEP 2: FastQC on all raw per-run FASTQ files"
+echo " STEP 2: FastQC par fichier individuel (par run × échantillon)"
 echo "======================================================================="
 
-for RUN_DIR in "${ALL_RUNS[@]}"; do
+for i in "${!ALL_RUNS[@]}"; do
+    RUN_DIR="${ALL_RUNS[$i]}"
+    RUN_LABEL="${RUN_LABELS[$i]}"
 
     echo ""
-    echo "  Run: ${RUN_DIR}"
+    echo "  Run: ${RUN_LABEL} (${RUN_DIR})"
 
-    # Build the list of cop FASTQ files for this run (flat or subdirectory)
-    mapfile -t RAW_FILES < <(
-        find "${RUN_DIR}" -maxdepth 2 -type f \
-            -name "*cop*.fastq.gz" \
-            2>/dev/null | sort
-    )
+    for SAMPLE in "${SAMPLES[@]}"; do
 
-    if [[ ${#RAW_FILES[@]} -eq 0 ]]; then
-        echo "    No cop FASTQ files found — skipping."
-        continue
-    fi
+        r1=$(find_fastq "${RUN_DIR}" "${SAMPLE}" "R1")
+        r2=$(find_fastq "${RUN_DIR}" "${SAMPLE}" "R2")
 
-    echo "    Found ${#RAW_FILES[@]} file(s). Launching FastQC..."
+        if [[ -z "${r1}" || -z "${r2}" ]]; then
+            echo "    [SKIP] ${SAMPLE} non présent dans ${RUN_LABEL}"
+            continue
+        fi
 
-    # Pass all files at once; -t controls threads across files
-    fastqc \
-        --threads "${THREADS}" \
-        --outdir "${FASTQC_RAW_DIR}" \
-        "${RAW_FILES[@]}"
+        # Répertoire de sortie FastQC pour ce run × échantillon
+        OUTDIR_FASTQC="${FASTQC_RAW_DIR}/${RUN_LABEL}/${SAMPLE}"
+        mkdir -p "${OUTDIR_FASTQC}"
 
+        echo "    [FastQC] ${SAMPLE} / ${RUN_LABEL}"
+        echo "      R1 : ${r1}"
+        echo "      R2 : ${r2}"
+
+        # Un appel FastQC par fichier pour avoir un rapport par séquence
+        fastqc --threads "${THREADS}" --outdir "${OUTDIR_FASTQC}" "${r1}"
+        fastqc --threads "${THREADS}" --outdir "${OUTDIR_FASTQC}" "${r2}"
+
+        echo "      Done: FastQC terminé pour ${SAMPLE} / ${RUN_LABEL}"
+
+    done
 done
 
 echo ""
-echo "  STEP 2 done. FastQC raw outputs in: ${FASTQC_RAW_DIR}"
+echo " STEP 2 done. Rapports FastQC individuels dans : ${FASTQC_RAW_DIR}"
 
 # ==============================================================================
-# STEP 3: FastQC on grouped (concatenated) files
-# All 10 grouped files (5 samples × R1/R2) are passed at once.
+# STEP 3 : MultiQC par échantillon × run
+#
+# Pour chaque combinaison échantillon/run qui a des rapports FastQC,
+# on lance un MultiQC dans le sous-dossier correspondant.
+# Exemple de structure produite :
+#   multiqc_per_run/cop408_RUN1/multiqc_report.html
+#   multiqc_per_run/cop408_RUN2/multiqc_report.html
+#   ...
 # ==============================================================================
 
 echo "======================================================================="
-echo "  STEP 3: FastQC on grouped (concatenated) FASTQ files"
+echo " STEP 3: MultiQC par échantillon × run"
+echo "======================================================================="
+
+for i in "${!ALL_RUNS[@]}"; do
+    RUN_LABEL="${RUN_LABELS[$i]}"
+
+    for SAMPLE in "${SAMPLES[@]}"; do
+
+        FASTQC_IN="${FASTQC_RAW_DIR}/${RUN_LABEL}/${SAMPLE}"
+
+        # On vérifie qu'il y a des rapports FastQC pour ce couple
+        if [[ ! -d "${FASTQC_IN}" ]] || \
+           [[ $(find "${FASTQC_IN}" -maxdepth 1 -name "*_fastqc.zip" | wc -l) -eq 0 ]]; then
+            echo "    [SKIP] Pas de rapports FastQC pour ${SAMPLE} / ${RUN_LABEL}"
+            continue
+        fi
+
+        MULTIQC_OUT="${MULTIQC_RAW_DIR}/${SAMPLE}_${RUN_LABEL}"
+        mkdir -p "${MULTIQC_OUT}"
+
+        echo "    [MultiQC] ${SAMPLE} / ${RUN_LABEL} -> ${MULTIQC_OUT}"
+
+        multiqc \
+            "${FASTQC_IN}" \
+            --outdir "${MULTIQC_OUT}" \
+            --filename "multiqc_report_${SAMPLE}_${RUN_LABEL}" \
+            --title "MultiQC — ${SAMPLE} ${RUN_LABEL}" \
+            --force
+
+        echo "      Done: MultiQC terminé pour ${SAMPLE} / ${RUN_LABEL}"
+
+    done
+done
+
+echo ""
+echo " STEP 3 done. Rapports MultiQC par run/échantillon dans : ${MULTIQC_RAW_DIR}"
+
+# ==============================================================================
+# STEP 4 : FastQC sur les fichiers groupés (concaténés)
+# Un rapport par fichier groupé (R1 et R2 séparément).
+# ==============================================================================
+
+echo "======================================================================="
+echo " STEP 4: FastQC sur les fichiers groupés (concaténés)"
 echo "======================================================================="
 
 mapfile -t GROUPED_FILES < <(
@@ -234,67 +295,50 @@ mapfile -t GROUPED_FILES < <(
 )
 
 if [[ ${#GROUPED_FILES[@]} -eq 0 ]]; then
-    echo "  ERROR: No grouped FASTQ files found in ${GROUPED_DIR}."
-    echo "  Check that STEP 1 completed correctly."
+    echo " ERROR: Aucun fichier groupé trouvé dans ${GROUPED_DIR}."
+    echo " Vérifier que STEP 1 s'est bien terminé."
     exit 1
 fi
 
-echo "  Found ${#GROUPED_FILES[@]} grouped file(s). Launching FastQC..."
+echo "  Trouvé ${#GROUPED_FILES[@]} fichier(s) groupé(s). Lancement FastQC..."
 
-fastqc \
-    --threads "${THREADS}" \
-    --outdir "${FASTQC_GROUPED_DIR}" \
-    "${GROUPED_FILES[@]}"
+for f in "${GROUPED_FILES[@]}"; do
+    echo "    [FastQC grouped] ${f}"
+    fastqc --threads "${THREADS}" --outdir "${FASTQC_GROUPED_DIR}" "${f}"
+done
 
 echo ""
-echo "  STEP 3 done. FastQC grouped outputs in: ${FASTQC_GROUPED_DIR}"
+echo " STEP 4 done. FastQC groupés dans : ${FASTQC_GROUPED_DIR}"
 
 # ==============================================================================
-# STEP 4: MultiQC on raw FastQC outputs
-# ==============================================================================
-
-echo "======================================================================="
-echo "  STEP 4: MultiQC on raw (per-run) FastQC outputs"
-echo "======================================================================="
-
-multiqc \
-    "${FASTQC_RAW_DIR}" \
-    --outdir "${MULTIQC_RAW_DIR}" \
-    --filename "multiqc_report_raw" \
-    --title "MultiQC — Raw per-run FASTQ quality" \
-    --force
-
-echo "  STEP 4 done. MultiQC raw report in: ${MULTIQC_RAW_DIR}"
-
-# ==============================================================================
-# STEP 5: MultiQC on grouped FastQC outputs
+# STEP 5 : MultiQC sur les fichiers groupés
 # ==============================================================================
 
 echo "======================================================================="
-echo "  STEP 5: MultiQC on grouped (concatenated) FastQC outputs"
+echo " STEP 5: MultiQC sur les fichiers groupés (concaténés)"
 echo "======================================================================="
 
 multiqc \
     "${FASTQC_GROUPED_DIR}" \
     --outdir "${MULTIQC_GROUPED_DIR}" \
     --filename "multiqc_report_grouped" \
-    --title "MultiQC — Grouped concatenated FASTQ quality" \
+    --title "MultiQC — Fichiers groupés (toutes données concaténées)" \
     --force
 
-echo "  STEP 5 done. MultiQC grouped report in: ${MULTIQC_GROUPED_DIR}"
+echo " STEP 5 done. MultiQC groupé dans : ${MULTIQC_GROUPED_DIR}"
 
 # ==============================================================================
-# FINAL SUMMARY
+# RÉSUMÉ FINAL
 # ==============================================================================
 
 echo ""
 echo "======================================================================="
-echo "  ALL STEPS COMPLETED SUCCESSFULLY"
+echo " ALL STEPS COMPLETED SUCCESSFULLY"
 echo "======================================================================="
 echo ""
-echo "  Grouped FASTQ files    : ${GROUPED_DIR}"
-echo "  FastQC raw outputs     : ${FASTQC_RAW_DIR}"
-echo "  FastQC grouped outputs : ${FASTQC_GROUPED_DIR}"
-echo "  MultiQC raw report     : ${MULTIQC_RAW_DIR}/multiqc_report_raw.html"
-echo "  MultiQC grouped report : ${MULTIQC_GROUPED_DIR}/multiqc_report_grouped.html"
+echo "  Fichiers groupés         : ${GROUPED_DIR}"
+echo "  FastQC par run/séquence  : ${FASTQC_RAW_DIR}"
+echo "  FastQC groupés           : ${FASTQC_GROUPED_DIR}"
+echo "  MultiQC par run/échant.  : ${MULTIQC_RAW_DIR}"
+echo "  MultiQC groupés          : ${MULTIQC_GROUPED_DIR}/multiqc_report_grouped.html"
 echo "======================================================================="
