@@ -38,7 +38,7 @@ conda activate bioinformatic
 
 # RUN1: structure plate — fichiers directement dans le dossier
 # Pattern: cop408_R1.fastq.gz  (pas de sous-dossier numéroté)
-RUN1="/storage/groups/gdec/shared_paleo/Illumina/01_raw_data"
+RUN1="/storage/groups/gdec/shared_paleo/Illumina/Coprolites_Illumina"
 
 # RUN2–RUN5: structure sous-dossier — fichiers dans 474_cop408/ etc.
 # Pattern: 474_cop408/474_cop408_R1.fastq.gz
