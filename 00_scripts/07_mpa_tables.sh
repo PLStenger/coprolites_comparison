@@ -23,7 +23,7 @@
 
 module load conda/4.12.0
 source ~/.bashrc
-conda activate bioinformatic
+conda activate metagenomics
 
 # ==============================================================================
 # PATHS
