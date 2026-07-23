@@ -1,14 +1,14 @@
 #!/bin/bash
 
-#SBATCH --job-name=08_bracken_krona_mpa
+#SBATCH --job-name=08_bracken_create_db
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
 #SBATCH -p smp
 #SBATCH --mem=128G
 #SBATCH --mail-user=pierrelouis.stenger@gmail.com
 #SBATCH --mail-type=ALL
-#SBATCH --error="/home/plstenge/coprolites_comparison/00_scripts/08_bracken_krona_mpa.err"
-#SBATCH --output="/home/plstenge/coprolites_comparison/00_scripts/08_bracken_krona_mpa.out"
+#SBATCH --error="/home/plstenge/coprolites_comparison/00_scripts/08_bracken_create_db.err"
+#SBATCH --output="/home/plstenge/coprolites_comparison/00_scripts/08_bracken_create_db.out"
 
 module load conda/4.12.0
 source ~/.bashrc
