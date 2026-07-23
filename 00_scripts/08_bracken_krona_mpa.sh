@@ -34,18 +34,18 @@ conda activate metagenomics
 
 BASE_DIR="/home/plstenge/coprolites_comparison"
 
-K35_KRAKEN_DIR="${BASE_DIR}/07_kraken2_k35"
+#K35_KRAKEN_DIR="${BASE_DIR}/07_kraken2_k35"
 K29_KRAKEN_DIR="${BASE_DIR}/07_kraken2_k29"
-K25_KRAKEN_DIR="${BASE_DIR}/07_kraken2_k25"
+#K25_KRAKEN_DIR="${BASE_DIR}/07_kraken2_k25"
 
-K35_DB="/storage/groups/gdec/shared/Kraken_database/k2_core_nt_20250609"
+#K35_DB="/storage/groups/gdec/shared/Kraken_database/k2_core_nt_20250609"
 K29_DB="/storage/groups/gdec/shared/Kraken_database/core_nt_k29"
-K25_DB="/storage/groups/gdec/shared/Kraken_database/core_nt_k25"
+#K25_DB="/storage/groups/gdec/shared/Kraken_database/core_nt_k25"
 
 OUT_BASE="${BASE_DIR}/10_bracken"
-K35_OUT="${OUT_BASE}/k35"
+#K35_OUT="${OUT_BASE}/k35"
 K29_OUT="${OUT_BASE}/k29"
-K25_OUT="${OUT_BASE}/k25"
+#K25_OUT="${OUT_BASE}/k25"
 
 KRAKENTOOLS_DIR="${BASE_DIR}/08_krakentools/KrakenTools"
 THREADS="${SLURM_CPUS_PER_TASK:-16}"
@@ -53,7 +53,7 @@ READ_LEN=50
 LEVEL="S"
 THRESHOLD=10
 
-mkdir -p "${K35_OUT}" "${K29_OUT}" "${K25_OUT}"
+#mkdir -p "${K35_OUT}" "${K29_OUT}" "${K25_OUT}"
 
 # ==============================================================================
 # STEP 0 : KrakenTools
