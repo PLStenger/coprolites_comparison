@@ -22,6 +22,12 @@
 #-------------------------------------------------------------------------------
 # CONFIGURATION (à adapter si besoin)
 #-------------------------------------------------------------------------------
+
+export LC_ALL=C
+export LANG=C
+export TMPDIR="$WORKDIR/tmp"
+mkdir -p "$TMPDIR"
+
 DB_NAME="nt_k29_PL"
 FINAL_DEST="/storage/groups/gdec/shared/Kraken_database/${DB_NAME}"
 
@@ -143,63 +149,69 @@ log "Répertoire de travail: $WORKDIR"
 log "Base en construction: $DB"
 
 #-------------------------------------------------------------------------------
-# 1. TEST RÉSEAU + TÉLÉCHARGEMENT DE LA TAXONOMIE
+# 1. TÉLÉCHARGEMENT ROBUSTE DE LA TAXONOMIE NCBI (sans k2 download-taxonomy)
 #-------------------------------------------------------------------------------
-log "=== Étape 1: Test réseau et téléchargement de la taxonomie NCBI ==="
+log "=== Étape 1: Téléchargement robuste de la taxonomie NCBI ==="
 
-test_ncbi_connectivity() {
+check_cmd wget
+check_cmd tar
+check_cmd gzip
+
+NCBI_TAXONOMY_URL="https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdump.tar.gz"
+NCBI_GB_URL="https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/accession2taxid/nucl_gb.accession2taxid.gz"
+NCBI_WGS_URL="https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/accession2taxid/nucl_wgs.accession2taxid.gz"
+
+download_file_retry() {
     local url="$1"
-    curl -I --silent --show-error --location --max-time 20 "$url" >/dev/null
-}
-
-download_taxonomy_with_retry() {
-    local db="$1"
+    local outfile="$2"
     local max_tries=5
     local attempt=1
     local sleep_time=60
 
     while (( attempt <= max_tries )); do
-        log "Tentative ${attempt}/${max_tries} de téléchargement de la taxonomie"
-
-        if k2 download-taxonomy --db "$db" 2>&1 | tee -a "$LOGFILE"; then
-            log "Téléchargement de la taxonomie réussi"
-            return 0
+        log "Téléchargement ${outfile} - tentative ${attempt}/${max_tries}"
+        if wget -4 --tries=1 --timeout=60 --waitretry=5 -O "$outfile" "$url" 2>&1 | tee -a "$LOGFILE"; then
+            [[ -s "$outfile" ]] && return 0
         fi
-
-        log "Échec tentative ${attempt}/${max_tries}"
+        log "Échec téléchargement ${outfile}"
+        rm -f "$outfile"
         if (( attempt < max_tries )); then
-            log "Attente ${sleep_time}s avant nouvelle tentative"
+            log "Nouvelle tentative dans ${sleep_time}s"
             sleep "$sleep_time"
         fi
         attempt=$((attempt + 1))
     done
-
     return 1
 }
 
 if [[ -s "${DB}/taxonomy/nodes.dmp" && -s "${DB}/taxonomy/names.dmp" && \
       -s "${DB}/taxonomy/nucl_gb.accession2taxid" && -s "${DB}/taxonomy/nucl_wgs.accession2taxid" ]]; then
-    log "Taxonomie déjà présente et complète, skip du téléchargement."
+    log "Taxonomie déjà présente et complète, skip."
 else
-    log "Test de connectivité vers NCBI..."
-    if test_ncbi_connectivity "https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/"; then
-        log "Connectivité NCBI OK"
-    else
-        die "Le test réseau vers NCBI échoue depuis ce job. Le serveur a peut-être Internet en login node mais pas sur les compute nodes."
-    fi
-
     rm -rf "${DB}/taxonomy"
     mkdir -p "${DB}/taxonomy"
+    cd "${DB}/taxonomy"
 
-    download_taxonomy_with_retry "$DB" || die "Impossible de télécharger la taxonomie après plusieurs tentatives"
+    download_file_retry "$NCBI_TAXONOMY_URL" "taxdump.tar.gz" || die "Impossible de télécharger taxdump.tar.gz"
+    download_file_retry "$NCBI_GB_URL" "nucl_gb.accession2taxid.gz" || die "Impossible de télécharger nucl_gb.accession2taxid.gz"
+    download_file_retry "$NCBI_WGS_URL" "nucl_wgs.accession2taxid.gz" || die "Impossible de télécharger nucl_wgs.accession2taxid.gz"
 
-    [[ -s "${DB}/taxonomy/nodes.dmp" ]] || die "nodes.dmp manquant après téléchargement"
-    [[ -s "${DB}/taxonomy/names.dmp" ]] || die "names.dmp manquant après téléchargement"
-    [[ -s "${DB}/taxonomy/nucl_gb.accession2taxid" ]] || die "nucl_gb.accession2taxid manquant après téléchargement"
-    [[ -s "${DB}/taxonomy/nucl_wgs.accession2taxid" ]] || die "nucl_wgs.accession2taxid manquant après téléchargement"
+    log "Extraction de taxdump.tar.gz"
+    tar -xzf taxdump.tar.gz 2>&1 | tee -a "$LOGFILE"
 
-    log "Taxonomie téléchargée et validée"
+    log "Décompression des fichiers accession2taxid"
+    gzip -dc nucl_gb.accession2taxid.gz > nucl_gb.accession2taxid
+    gzip -dc nucl_wgs.accession2taxid.gz > nucl_wgs.accession2taxid
+
+    [[ -s "nodes.dmp" ]] || die "nodes.dmp manquant après extraction"
+    [[ -s "names.dmp" ]] || die "names.dmp manquant après extraction"
+    [[ -s "nucl_gb.accession2taxid" ]] || die "nucl_gb.accession2taxid manquant après décompression"
+    [[ -s "nucl_wgs.accession2taxid" ]] || die "nucl_wgs.accession2taxid manquant après décompression"
+
+    log "Taxonomie NCBI téléchargée et installée avec succès"
+    cd - >/dev/null
 fi
+
 #-------------------------------------------------------------------------------
 # 2. GÉNÉRATION DU FICHIER seqid2taxid.map
 #-------------------------------------------------------------------------------
