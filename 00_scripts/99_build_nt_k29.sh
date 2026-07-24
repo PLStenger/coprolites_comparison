@@ -37,8 +37,12 @@ WORKDIR="/dev/shm/${DB_NAME}_build"
 # Répertoire de secours si /dev/shm est trop petit (disque rapide local)
 FALLBACK_WORKDIR="/tmp/${DB_NAME}_build"
 
-CONDA_ENV="kraken2-2.17.1"
-BRACKEN_ENV="bracken"          # env conda contenant bracken-build, sinon on l'installe dans kraken2 env
+module load conda/4.12.0
+source ~/.bashrc
+conda activate metagenomics
+
+CONDA_ENV="metagenomics"
+BRACKEN_ENV="metagenomics"          # env conda contenant bracken-build, sinon on l'installe dans kraken2 env
 BRACKEN_READ_LENS=(50 75 100 150)   # longueurs de reads à préparer pour Bracken
 
 LOGFILE="build_${DB_NAME}_$(date +%Y%m%d_%H%M%S).log"
