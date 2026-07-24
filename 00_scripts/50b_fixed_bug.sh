@@ -10,8 +10,6 @@
 #SBATCH --error="/home/plstenge/coprolites_comparison/00_scripts/50b_fixed_bug.err"
 #SBATCH --output="/home/plstenge/coprolites_comparison/00_scripts/50b_fixed_bug.out"
 
-set -euo pipefail
-
 # ==============================================================================
 # Script : rerun_bracken_k25_k29.sh
 # Purpose :
