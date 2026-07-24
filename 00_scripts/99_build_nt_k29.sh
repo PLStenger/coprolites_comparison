@@ -37,12 +37,28 @@ WORKDIR="/dev/shm/${DB_NAME}_build"
 # Répertoire de secours si /dev/shm est trop petit (disque rapide local)
 FALLBACK_WORKDIR="/tmp/${DB_NAME}_build"
 
+#-------------------------------------------------------------------------------
+# ENVIRONNEMENT CONDA
+#-------------------------------------------------------------------------------
 module load conda/4.12.0
 source ~/.bashrc
-conda activate metagenomics
+source "$(conda info --base)/etc/profile.d/conda.sh"
 
 CONDA_ENV="metagenomics"
-BRACKEN_ENV="metagenomics"          # env conda contenant bracken-build, sinon on l'installe dans kraken2 env
+BRACKEN_ENV="metagenomics"
+
+conda activate "$CONDA_ENV" || die "Impossible d'activer l'environnement conda '$CONDA_ENV'"
+
+check_cmd k2
+check_cmd bracken-build
+check_cmd python
+check_cmd curl
+
+log "Conda env actif: $CONDA_DEFAULT_ENV"
+log "Executable k2: $(command -v k2)"
+log "Executable bracken-build: $(command -v bracken-build)"
+log "Python: $(python --version 2>&1)"
+
 BRACKEN_READ_LENS=(50 75 100 150)   # longueurs de reads à préparer pour Bracken
 
 LOGFILE="build_${DB_NAME}_$(date +%Y%m%d_%H%M%S).log"
@@ -127,17 +143,63 @@ log "Répertoire de travail: $WORKDIR"
 log "Base en construction: $DB"
 
 #-------------------------------------------------------------------------------
-# 1. TÉLÉCHARGEMENT DE LA TAXONOMIE
+# 1. TEST RÉSEAU + TÉLÉCHARGEMENT DE LA TAXONOMIE
 #-------------------------------------------------------------------------------
-log "=== Étape 1: Téléchargement de la taxonomie NCBI ==="
+log "=== Étape 1: Test réseau et téléchargement de la taxonomie NCBI ==="
 
-if [[ ! -s "${DB}/taxonomy/nodes.dmp" || ! -s "${DB}/taxonomy/names.dmp" ]]; then
-    die "Taxonomie absente dans ${DB}/taxonomy, mais le nœud n'a pas Internet. Copie la taxonomie depuis un téléchargement effectué en amont."
+test_ncbi_connectivity() {
+    local url="$1"
+    curl -I --silent --show-error --location --max-time 20 "$url" >/dev/null
+}
+
+download_taxonomy_with_retry() {
+    local db="$1"
+    local max_tries=5
+    local attempt=1
+    local sleep_time=60
+
+    while (( attempt <= max_tries )); do
+        log "Tentative ${attempt}/${max_tries} de téléchargement de la taxonomie"
+
+        if k2 download-taxonomy --db "$db" 2>&1 | tee -a "$LOGFILE"; then
+            log "Téléchargement de la taxonomie réussi"
+            return 0
+        fi
+
+        log "Échec tentative ${attempt}/${max_tries}"
+        if (( attempt < max_tries )); then
+            log "Attente ${sleep_time}s avant nouvelle tentative"
+            sleep "$sleep_time"
+        fi
+        attempt=$((attempt + 1))
+    done
+
+    return 1
+}
+
+if [[ -s "${DB}/taxonomy/nodes.dmp" && -s "${DB}/taxonomy/names.dmp" && \
+      -s "${DB}/taxonomy/nucl_gb.accession2taxid" && -s "${DB}/taxonomy/nucl_wgs.accession2taxid" ]]; then
+    log "Taxonomie déjà présente et complète, skip du téléchargement."
+else
+    log "Test de connectivité vers NCBI..."
+    if test_ncbi_connectivity "https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/"; then
+        log "Connectivité NCBI OK"
+    else
+        die "Le test réseau vers NCBI échoue depuis ce job. Le serveur a peut-être Internet en login node mais pas sur les compute nodes."
+    fi
+
+    rm -rf "${DB}/taxonomy"
+    mkdir -p "${DB}/taxonomy"
+
+    download_taxonomy_with_retry "$DB" || die "Impossible de télécharger la taxonomie après plusieurs tentatives"
+
+    [[ -s "${DB}/taxonomy/nodes.dmp" ]] || die "nodes.dmp manquant après téléchargement"
+    [[ -s "${DB}/taxonomy/names.dmp" ]] || die "names.dmp manquant après téléchargement"
+    [[ -s "${DB}/taxonomy/nucl_gb.accession2taxid" ]] || die "nucl_gb.accession2taxid manquant après téléchargement"
+    [[ -s "${DB}/taxonomy/nucl_wgs.accession2taxid" ]] || die "nucl_wgs.accession2taxid manquant après téléchargement"
+
+    log "Taxonomie téléchargée et validée"
 fi
-
-[[ -f "${DB}/taxonomy/nucl_gb.accession2taxid" ]] || die "nucl_gb.accession2taxid manquant après download-taxonomy"
-[[ -f "${DB}/taxonomy/nucl_wgs.accession2taxid" ]] || die "nucl_wgs.accession2taxid manquant après download-taxonomy"
-
 #-------------------------------------------------------------------------------
 # 2. GÉNÉRATION DU FICHIER seqid2taxid.map
 #-------------------------------------------------------------------------------
