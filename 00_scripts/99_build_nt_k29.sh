@@ -131,10 +131,8 @@ log "Base en construction: $DB"
 #-------------------------------------------------------------------------------
 log "=== Étape 1: Téléchargement de la taxonomie NCBI ==="
 
-if [[ -s "${DB}/taxonomy/nodes.dmp" && -s "${DB}/taxonomy/names.dmp" ]]; then
-    log "Taxonomie déjà présente, skip du téléchargement complet."
-else
-    k2 download-taxonomy --db "$DB" 2>&1 | tee -a "$LOGFILE"
+if [[ ! -s "${DB}/taxonomy/nodes.dmp" || ! -s "${DB}/taxonomy/names.dmp" ]]; then
+    die "Taxonomie absente dans ${DB}/taxonomy, mais le nœud n'a pas Internet. Copie la taxonomie depuis un téléchargement effectué en amont."
 fi
 
 [[ -f "${DB}/taxonomy/nucl_gb.accession2taxid" ]] || die "nucl_gb.accession2taxid manquant après download-taxonomy"
