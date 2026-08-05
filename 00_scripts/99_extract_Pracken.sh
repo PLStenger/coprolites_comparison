@@ -40,8 +40,6 @@
 #     eviter un etat incoherent (melange ancien/nouveau).
 # ==============================================================================
 
-set -uo pipefail
-
 ARCHIVE="/storage/groups/gdec/shared/Kraken_database/k2_NCBI_reference_20251007.tar.gz"
 DEST_DIR="/storage/groups/gdec/shared/Kraken_database"
 DB_NAME="k2_NCBI_reference_20251007"
