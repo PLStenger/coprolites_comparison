@@ -38,8 +38,6 @@ conda activate metagenomics
 #     *.bracken.report existent effectivement dans 06_bracken/pracken/.
 ################################################################################
 
-set -Eeuo pipefail
-
 trap 'echo "[ERREUR] Ligne ${LINENO} : ${BASH_COMMAND}" >&2' ERR
 
 ################################################################################
