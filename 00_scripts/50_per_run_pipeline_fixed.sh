@@ -155,6 +155,7 @@ mkdir -p "${MPA_DIR}/k29/merged" "${MPA_DIR}/k29/unmerged"
 mkdir -p "${MPA_DIR}/k35/merged" "${MPA_DIR}/k35/unmerged"
 mkdir -p "${MPA_DIR}/pracken/merged" "${MPA_DIR}/pracken/unmerged"
 
+
 if [[ ! -d "${KRAKENTOOLS_DIR}" ]]; then
     echo "  KrakenTools non trouve, installation..."
     mkdir -p "${WORKDIR}/08_krakentools"
@@ -550,16 +551,18 @@ gen_mpa_for_source() {
 }
 
 # Bracken : reports dans 06_bracken/k*/run*/cop*/
-gen_mpa_for_source "bracken" "k25"     "${BRACKEN_DIR}/k25"     "${MPA_DIR}/k25"
-gen_mpa_for_source "bracken" "k29"     "${BRACKEN_DIR}/k29"     "${MPA_DIR}/k29"
-gen_mpa_for_source "bracken" "k35"     "${BRACKEN_DIR}/k35"     "${MPA_DIR}/k35"
-gen_mpa_for_source "bracken" "pracken" "${BRACKEN_DIR}/pracken" "${MPA_DIR}/pracken"
+gen_mpa_for_source "bracken" "k25" "${BRACKEN_DIR}" "${MPA_DIR}"
+gen_mpa_for_source "bracken" "k29" "${BRACKEN_DIR}" "${MPA_DIR}"
+gen_mpa_for_source "bracken" "k35" "${BRACKEN_DIR}" "${MPA_DIR}"
 
 # Kraken : reports dans 05_kraken2_k*/run*/cop*/
-gen_mpa_for_source "kraken" "k25"     "${KRAKEN_K25_DIR}"     "${MPA_DIR}/k25"
-gen_mpa_for_source "kraken" "k29"     "${KRAKEN_K29_DIR}"     "${MPA_DIR}/k29"
-gen_mpa_for_source "kraken" "k35"     "${KRAKEN_K35_DIR}"     "${MPA_DIR}/k35"
-gen_mpa_for_source "kraken" "pracken" "${KRAKEN_PRACKEN_DIR}" "${MPA_DIR}/pracken"
+gen_mpa_for_source "kraken" "k25" "${KRAKEN_K25_DIR}" "${MPA_DIR}"
+gen_mpa_for_source "kraken" "k29" "${KRAKEN_K29_DIR}" "${MPA_DIR}"
+gen_mpa_for_source "kraken" "k35" "${KRAKEN_K35_DIR}" "${MPA_DIR}"
+
+# Kraken : base pracken
+gen_mpa_for_source "kraken" "pracken" "${KRAKEN_PRACKEN_DIR}" "${MPA_DIR}"
+
 
 echo ""
 echo "  STEP 3 done."
@@ -650,7 +653,7 @@ else
         mode=$(echo "$f" | awk -F'/' '{for(i=1;i<=NF;i++) if($i=="merged"||$i=="unmerged"){print $i; break}}')
         sample=$(echo "$basename_f" | sed -E 's/^([^_]+)_.*$/\1/')
         run=$(echo "$basename_f" | sed -E 's/^[^_]+_([^_]+)_.*$/\1/')
-        source=$(echo "$basename_f" | sed -E 's/^.*_([^_]+)\.mpa$/\1/')
+        source=$(echo "$basename_f" | sed -E 's/^.*\.(bracken|kraken)\.mpa$/\1/')
 
         colname="${klabel}_${mode}_${sample}_${run}_${source}"
         HEADER_COLS+=("$colname")
