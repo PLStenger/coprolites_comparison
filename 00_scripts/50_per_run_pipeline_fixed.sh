@@ -197,8 +197,6 @@ for i in "${!ALL_RUNS[@]}"; do
 
         UNIT="${SAMPLE}_${RUN_LABEL}"
 
-                UNIT="${SAMPLE}_${RUN_LABEL}"
-
         # ------------------------------------------------------------------
         # RESUME APRES TIMEOUT (job precedent: 3-00:00:15, TIMEOUT, ExitCode 0)
         # Unites STEP 1 deja totalement terminees (BBDuk->FastUniq->Clumpify->
