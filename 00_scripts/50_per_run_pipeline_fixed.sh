@@ -196,6 +196,41 @@ for i in "${!ALL_RUNS[@]}"; do
         fi
 
         UNIT="${SAMPLE}_${RUN_LABEL}"
+
+                UNIT="${SAMPLE}_${RUN_LABEL}"
+
+        # ------------------------------------------------------------------
+        # RESUME APRES TIMEOUT (job precedent: 3-00:00:15, TIMEOUT, ExitCode 0)
+        # Unites STEP 1 deja totalement terminees (BBDuk->FastUniq->Clumpify->
+        # fastp->Kraken2 k25/k29/k35/pracken merged+unmerged), confirmees par
+        # ">>> Pipeline complet termine pour <UNIT> <<<" dans le .out precedent.
+        # On les saute pour ne pas perdre de temps a refaire du travail deja fait.
+        # ------------------------------------------------------------------
+        ALREADY_DONE_UNITS=(
+            "cop408_run1" "cop410_run1" "cop412_run1" "cop414_run1" "cop417_run1"
+            "cop408_run2" "cop412_run2" "cop414_run2"
+            "cop408_run3" "cop412_run3" "cop414_run3"
+            "cop408_run4" "cop410_run4" "cop412_run4" "cop414_run4" "cop417_run4"
+            "cop408_run5"
+        )
+        # cop410_run5 : INCOMPLET dans le run precedent (arrete pile apres
+        # "[Kraken2 pracken] cop410_run5 (merged)", l'unmerged pracken et la
+        # cloture ne sont pas confirmes) -> on le REFAIT entierement par securite.
+        # cop412_run5, cop414_run5, cop417_run5 : jamais commences -> a faire.
+
+        SKIP_THIS_UNIT=0
+        for DONE_UNIT in "${ALREADY_DONE_UNITS[@]}"; do
+            if [[ "${UNIT}" == "${DONE_UNIT}" ]]; then
+                SKIP_THIS_UNIT=1
+                break
+            fi
+        done
+
+        if [[ "${SKIP_THIS_UNIT}" -eq 1 ]]; then
+            echo "  [RESUME-SKIP] ${UNIT} deja termine lors du run precedent, on saute."
+            continue
+        fi
+        
         echo ""
         echo "-----------------------------------------------------------------"
         echo " Unite de traitement : ${UNIT}"
