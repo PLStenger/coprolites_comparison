@@ -117,18 +117,18 @@ cd "${WORKDIR}" || exit 1
 # ==============================================================================
 
 extract_unassigned() {
-    local KRAKEN_FILE="$1"   # fichier .kraken du niveau precedent
-    local SEQ_FILE="$2"      # fastq source du niveau precedent
-    local OUT_FASTQ="$3"     # fastq de sortie (reads non classes uniquement)
+    local KRAKEN_FILE="$1"
+    local SEQ_FILE="$2"
+    local OUT_FASTQ="$3"
 
     python3 "${KRAKENTOOLS_DIR}/extract_kraken_reads.py" \
         -k "${KRAKEN_FILE}" \
         -s "${SEQ_FILE}" \
         -t 0 \
         -o "${OUT_FASTQ}" \
-        --include-children \
         --fastq-output
 }
+
 
 # ==============================================================================
 # STEP 1 : Cascade Kraken2 k35 -> k29 -> k25 sur les reads merged, par
