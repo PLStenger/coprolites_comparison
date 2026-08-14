@@ -5,8 +5,10 @@
 #SBATCH -p smp
 #SBATCH --mem=10G
 #SBATCH --time=01:00:00
-#SBATCH --output=/home/plstenge/coprolites_comparison/00_scripts/09_kraken_following_k35_mpa.out
-#SBATCH --error=/home/plstenge/coprolites_comparison/00_scripts/09_kraken_following_k35_mpa.err
+#SBATCH --output=/home/plstenge/coprolites_comparison/00_scripts/mpa_k35.out
+#SBATCH --error=/home/plstenge/coprolites_comparison/00_scripts/mpa_k35.err
+
+set -euo pipefail
 
 # ============================================================
 # Conversion des rapports Kraken2 k35 uniquement en tables MPA
@@ -81,4 +83,6 @@ python3 "${KRAKENTOOLS_DIR}/combine_mpa.py" \
 echo "============================================================"
 echo "Terminé."
 echo "Tables individuelles : ${OUTDIR}/copXXX_k35.mpa"
-echo "Table combinée
+echo "Table combinée finale :"
+echo "${OUTDIR}/combined_all_samples_k35.tsv"
+echo "============================================================"
