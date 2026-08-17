@@ -37,7 +37,7 @@ KRAKENTOOLS_DIR="${WORKDIR}/08_krakentools/KrakenTools"
 THREADS="${SLURM_CPUS_PER_TASK:-36}"
 SAMPLES=("goat")
 
-OUT_ROOT="${WORKDIR}/10_mapdamage_following"
+OUT_ROOT="${WORKDIR}/10_mapdamage_following_goat_sheep"
 TMP_ROOT="${OUT_ROOT}/tmp_cascade_fastq"
 SUMMARY_DIR="${WORKDIR}/10_summary_tables"
 mkdir -p "${OUT_ROOT}" "${TMP_ROOT}" "${SUMMARY_DIR}"
