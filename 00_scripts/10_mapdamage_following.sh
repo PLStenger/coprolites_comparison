@@ -46,10 +46,19 @@ LOGFILE="${WORKDIR}/00_scripts/mapdamage_following_$(date +%Y%m%d_%H%M%S).txt"
 MAPPING_INFO="${SUMMARY_DIR}/mapping_bwa_info_following.tsv"
 echo -e "Sample\tTaxon\tExtracted_k35\tExtracted_k29\tExtracted_k25\tTotal_extracted\tMapped_reads\tMapping_rate_percent" > "${MAPPING_INFO}"
 
+bwa index /home/plstenge/genomes/Alces_alces/GCA_059051365.1_mAlcAlc2_p1.1_genomic.fna
+bwa index /home/plstenge/genomes/Rangifer_tarandus/GCA_949782905.1_mRanTar1.h1.1_genomic.fna
+
 declare -A TAXONS=(
-    ["Ovis_aries"]="9940:/home/plstenge/genomes/Ovis_aries/Ovis_aries.ARS-UI_Ramb_v3.0.dna.toplevel.fa"
-    ["Capra_hircus"]="9925:/home/plstenge/genomes/Capra_hircus/Capra_hircus.ARS1.dna.toplevel.fa"
-    ["Corylus_avellana"]="13451:/home/plstenge/genomes/Corylus_avellana/Corylus_avellana_CavTom2PMs_1_0.fasta"
+   # ["Ovis_aries"]="9940:/home/plstenge/genomes/Ovis_aries/Ovis_aries.ARS-UI_Ramb_v3.0.dna.toplevel.fa"
+   # ["Capra_hircus"]="9925:/home/plstenge/genomes/Capra_hircus/Capra_hircus.ARS1.dna.toplevel.fa"
+   # ["Corylus_avellana"]="13451:/home/plstenge/genomes/Corylus_avellana/Corylus_avellana_CavTom2PMs_1_0.fasta"
+   ["Mus_musculus"]="10090:/home/plstenge/genomes/Mus_musculus/Mus_musculus.GRCm39.dna.toplevel.fa"
+   ["Alces_alces"]="9852:/home/plstenge/genomes/Alces_alces/GCA_059051365.1_mAlcAlc2_p1.1_genomic.fna"
+   ["Rangifer_tarandus"]="9870:/home/plstenge/genomes/Rangifer_tarandus/GCA_949782905.1_mRanTar1.h1.1_genomic.fna"
+   ["Cannabis_sativa"]="3483:/home/plstenge/genomes/Cannabis_sativa/GCF_029168945.1_ASM2916894v1_genomic.fna"
+   ["Homo_sapiens"]="9606:/home/plstenge/genomes/Homo_sapiens/GCF_000001405.40_GRCh38.p14_genomic.fna"
+   ["Rubus_caesius"]="75065:/home/plstenge/genomes/Rubus_caesius/GCA_964235055.1_drRubCaes1.hap1.1_genomic.fna"
 )
 
 count_fastq_reads() {
