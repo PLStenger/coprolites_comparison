@@ -65,24 +65,42 @@ count_fastq_reads() {
 
 check_bwa_index() {
     local ref="$1"
-    [[ -f "${ref}.amb" && -f "${ref}.ann" && -f "${ref}.bwt" && -f "${ref}.pac" && -f "${ref}.sa" ]]
+    [[ -f "${ref}.amb" && -f "${ref}.ann" && -f "${ref}.bwt" && \
+       -f "${ref}.pac" && -f "${ref}.sa" ]]
 }
 
 extract_unclassified() {
     # TaxID 0 correspond exactement aux lignes U : pas de --include-children,
     # et donc pas besoin de --report.
-    local kraken="$1" fastq="$2" out_fastq="$3"
+    local kraken="$1"
+    local fastq="$2"
+    local out_fastq="$3"
+
     python3 "${KRAKENTOOLS_DIR}/extract_kraken_reads.py" \
-        -k "${kraken}" -s "${fastq}" -t 0 -o "${out_fastq}" --fastq-output
+        -k "${kraken}" \
+        -s "${fastq}" \
+        -t 0 \
+        -o "${out_fastq}" \
+        --fastq-output
 }
 
 extract_taxon() {
     # --include-children exige obligatoirement le report correspondant au
-    # fichier .kraken. Cela recupere le taxon et ses descendants.
-    local kraken="$1" report="$2" fastq="$3" taxid="$4" out_fastq="$5"
+    # fichier .kraken. Cela récupère le taxon et ses descendants.
+    local kraken="$1"
+    local report="$2"
+    local fastq="$3"
+    local taxid="$4"
+    local out_fastq="$5"
+
     python3 "${KRAKENTOOLS_DIR}/extract_kraken_reads.py" \
-        -k "${kraken}" -r "${report}" -s "${fastq}" -t "${taxid}" \
-        --include-children -o "${out_fastq}" --fastq-output
+        -k "${kraken}" \
+        -r "${report}" \
+        -s "${fastq}" \
+        -t "${taxid}" \
+        --include-children \
+        -o "${out_fastq}" \
+        --fastq-output
 }
 
 # Verification et indexation des references.
