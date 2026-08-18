@@ -22,9 +22,6 @@
 # les niveaux afin que chaque fichier .kraken corresponde au bon FASTQ.
 # ==============================================================================
 
-set -Eeuo pipefail
-shopt -s nullglob
-
 module load conda/4.12.0
 source ~/.bashrc
 conda activate metagenomics
