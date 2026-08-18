@@ -46,9 +46,9 @@ LOGFILE="${WORKDIR}/00_scripts/mapdamage_following_$(date +%Y%m%d_%H%M%S).txt"
 MAPPING_INFO="${SUMMARY_DIR}/mapping_bwa_info_following.tsv"
 echo -e "Sample\tTaxon\tExtracted_k35\tExtracted_k29\tExtracted_k25\tTotal_extracted\tMapped_reads\tMapping_rate_percent" > "${MAPPING_INFO}"
 
-bwa index /home/plstenge/genomes/Capra_ibex/GCA_054642885.1_CapIbe1.0_genomic.fna
-bwa index /home/plstenge/genomes/Capra_aegagrus/GCA_000978405.1_CapAeg_1.0_genomic.fna
-bwa index /home/plstenge/genomes/Capra_sibirica/GCA_003182615.2_ASM318261v2_genomic.fna
+#bwa index /home/plstenge/genomes/Capra_ibex/GCA_054642885.1_CapIbe1.0_genomic.fna
+#bwa index /home/plstenge/genomes/Capra_aegagrus/GCA_000978405.1_CapAeg_1.0_genomic.fna
+#bwa index /home/plstenge/genomes/Capra_sibirica/GCA_003182615.2_ASM318261v2_genomic.fna
 
 # TAXON ID 9922 correspond à Capra (genre)
 
