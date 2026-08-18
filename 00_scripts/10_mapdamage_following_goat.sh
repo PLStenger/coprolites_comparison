@@ -7,8 +7,8 @@
 #SBATCH --mem=1000G
 #SBATCH --mail-user=pierrelouis.stenger@gmail.com
 #SBATCH --mail-type=ALL
-#SBATCH --error="/home/plstenge/coprolites_comparison/00_scripts/10_mapdamage_following.err"
-#SBATCH --output="/home/plstenge/coprolites_comparison/00_scripts/10_mapdamage_following.out"
+#SBATCH --error="/home/plstenge/coprolites_comparison/00_scripts/10_mapdamage_following_goat.err"
+#SBATCH --output="/home/plstenge/coprolites_comparison/00_scripts/10_mapdamage_following_goat.out"
 
 # ==============================================================================
 # MapDamage sur la cascade Kraken2 k35 -> k29 -> k25, reads merged uniquement, sur ech groupés par goat and sheep
