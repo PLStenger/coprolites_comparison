@@ -27,7 +27,7 @@ source ~/.bashrc
 conda activate mapdamage_py39
 
 WORKDIR="/home/plstenge/coprolites_comparison"
-FASTP_DIR="${WORKDIR}/06_fastp"
+FASTP_DIR="${WORKDIR}/06_fastp_grouped_species"
 FOLLOWING_DIR="${WORKDIR}/09_kraken_following_goat_sheep"
 K35_DIR="${FOLLOWING_DIR}/k35"
 K29_DIR="${FOLLOWING_DIR}/k29"
