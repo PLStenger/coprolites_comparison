@@ -9,8 +9,6 @@
 #SBATCH --error=/home/plstenge/coprolites_comparison/00_scripts/13_blast_kraken_fastq_%j.err
 #SBATCH --output=/home/plstenge/coprolites_comparison/00_scripts/13_blast_kraken_fastq_%j.out
 
-set -euo pipefail
-
 module load conda/4.12.0
 source ~/.bashrc
 conda activate metagenomics
