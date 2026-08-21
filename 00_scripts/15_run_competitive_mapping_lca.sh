@@ -35,11 +35,11 @@ mkdir -p ${OUTDIR}/{ref,mapped,dedup,filtered,lca,coverage,logs}
 
 REF_LIST=(
   "Alces_alces:${GENOMES}/Alces_alces/GCA_059051365.1_mAlcAlc2_p1.1_genomic.fna"
-  "Capra_hircus:${GENOMES}/Capra_hircus/Capra_hircus.ARS1.dna.toplevel.fixed.fa"
+  "Capra_hircus:${GENOMES}/Capra_hircus/Capra_hircus.ARS1.dna.toplevel.fa"
   "Capra_ibex:${GENOMES}/Capra_ibex/GCA_054642885.1_CapIbe1.0_genomic.fna"
   "Capra_sibirica:${GENOMES}/Capra_sibirica/GCA_003182615.2_ASM318261v2_genomic.fna"
   "Capra_aegagrus:${GENOMES}/Capra_aegagrus/GCA_000978405.1_CapAeg_1.0_genomic.fna"
-  "Ovis_aries:${GENOMES}/Ovis_aries/Ovis_aries.ARS-UI_Ramb_v3.0.dna.toplevel.fixed.fa"
+  "Ovis_aries:${GENOMES}/Ovis_aries/Ovis_aries.ARS-UI_Ramb_v3.0.dna.toplevel.fa"
   "Rangifer_tarandus:${GENOMES}/Rangifer_tarandus/GCA_949782905.1_mRanTar1.h1.1_genomic.fna"
   "Mus_musculus:${GENOMES}/Mus_musculus/Mus_musculus.GRCm39.dna.toplevel.fa"
   "Bos_taurus:${GENOMES}/Bos_taurus/GCF_002263795.3_ARS-UCD2.0_genomic.fna"
@@ -47,7 +47,7 @@ REF_LIST=(
 
 # Optionnel: mitogenome Ovis_aries dedie, si present
 if [ -d "${GENOMES}/Ovis_aries/Ovis_aries_mitochondrion" ]; then
-  MITO_FILE=$(find "${GENOMES}/Ovis_aries/Ovis_aries_mitochondrion" -name "*.fa*" | head -n1)
+  MITO_FILE=$(find "${GENOMES}/Ovis_aries/Ovis_aries_mitochondrion" -name "*.fa" -o -name "*.fasta" | head -n1)
   if [ -n "${MITO_FILE:-}" ]; then
     REF_LIST+=("Ovis_aries_mito:${MITO_FILE}")
   fi
@@ -71,6 +71,9 @@ declare -A TAXIDS=(
   [Bos_taurus]=9913
 )
 
+#echo -e "species\ttaxid" > ${TAXID_LIST}
+#for k in "${!TAXIDS[@]}"; do echo -e "${k}\t${TAXIDS[$k]}"; done >> ${TAXID_LIST}
+
 echo -e "species\ttaxid" > ${TAXID_LIST}
 for k in "${!TAXIDS[@]}"; do echo -e "${k}\t${TAXIDS[$k]}"; done >> ${TAXID_LIST}
 
@@ -88,22 +91,29 @@ for entry in "${REF_LIST[@]}"; do
     continue
   fi
 
-  echo "  -> ajout de ${species} (taxid ${taxid}) depuis $(basename ${fasta})"
+  echo "  -> ajout de ${species} (taxid ${taxid}) depuis $(basename "$fasta")"
 
-  # Renommer chaque header pour inclure l'espece, garder l'accession d'origine
+  # Renommer chaque header pour inclure l'espece, garder l'accession d'origine.
+  # Point critique: ne jamais parser un .pac/.bwt/.fai comme FASTA.
   awk -v sp="${species}" '
     /^>/ {
       acc=substr($1,2)
-      print ">"sp"__"acc" "substr($0, index($0,$2))
+      desc=""
+      if (NF > 1) {
+        desc=substr($0, length($1) + 2)
+      }
+      print ">" sp "__" acc (desc ? " " desc : "")
       next
     }
     { print }
   ' "$fasta" >> ${COMPETITIVE_REF}
 
-  # Construire acc2taxid : chaque header devient sp__acc -> taxid
-  grep "^>" "$fasta" | awk -v sp="${species}" -v tid="${taxid}" '
-    { acc=substr($1,2); print sp"__"acc"\t"tid }
-  ' >> ${ACC2TAX}
+  awk -v sp="${species}" -v tid="${taxid}" '
+    /^>/ {
+      acc=substr($1,2)
+      print sp "__" acc "\t" tid
+    }
+  ' "$fasta" >> ${ACC2TAX}
 done
 
 echo "  Reference competitive: ${COMPETITIVE_REF}"
@@ -113,9 +123,8 @@ echo "  Table acc2taxid: ${ACC2TAX}"
 # ETAPE 2 : indexer la reference avec bwa + samtools faidx
 ########################################
 echo "[2/9] Indexation bwa de la reference competitive (peut prendre du temps)..."
-if [ ! -f "${COMPETITIVE_REF}.bwt" ]; then
-  bwa index ${COMPETITIVE_REF} 2> ${OUTDIR}/logs/bwa_index.log
-fi
+rm -f ${COMPETITIVE_REF}.amb ${COMPETITIVE_REF}.ann ${COMPETITIVE_REF}.bwt ${COMPETITIVE_REF}.pac ${COMPETITIVE_REF}.sa ${COMPETITIVE_REF}.fai
+bwa index ${COMPETITIVE_REF} 2> ${OUTDIR}/logs/bwa_index.log
 samtools faidx ${COMPETITIVE_REF}
 
 ########################################
@@ -142,15 +151,10 @@ for sample in "${SAMPLES[@]}"; do
     | samtools sort -@ ${THREADS} -o ${BAM_SORTED} -
   samtools index ${BAM_SORTED}
 
-  echo "[5/9] Deduplication (samtools markdup, single-end) pour ${sample}..."
-  BAM_FIXMATE=${OUTDIR}/dedup/${sample}.fixmate.bam
+  echo "[5/9] Deduplication (single-end) pour ${sample}..."
   BAM_DEDUP=${OUTDIR}/dedup/${sample}.dedup.bam
-  samtools sort -n -@ ${THREADS} -o ${OUTDIR}/dedup/${sample}.nsorted.bam ${BAM_SORTED}
-  samtools fixmate -m ${OUTDIR}/dedup/${sample}.nsorted.bam ${BAM_FIXMATE}
-  samtools sort -@ ${THREADS} -o ${OUTDIR}/dedup/${sample}.possorted.bam ${BAM_FIXMATE}
-  samtools markdup -r -@ ${THREADS} ${OUTDIR}/dedup/${sample}.possorted.bam ${BAM_DEDUP}
+  samtools markdup -r -s -@ ${THREADS} ${BAM_SORTED} ${BAM_DEDUP}
   samtools index ${BAM_DEDUP}
-  rm -f ${OUTDIR}/dedup/${sample}.nsorted.bam ${OUTDIR}/dedup/${sample}.possorted.bam
 
   echo "[6/9] Filtrage MAPQ (>=25) et edit distance pour ${sample}..."
   BAM_FILTERED=${OUTDIR}/filtered/${sample}.filtered.bam
@@ -192,12 +196,13 @@ done
 ########################################
 echo "[9/9] Calcul de la couverture par fenetre pour verifier la distribution des reads..."
 
+awk 'BEGIN{OFS="\t"} {print $1, $2}' ${COMPETITIVE_REF}.fai > ${OUTDIR}/coverage/genome.sizes
+
 for sample in "${SAMPLES[@]}"; do
   BAM_FILTERED=${OUTDIR}/filtered/${sample}.filtered.bam
   [ -f "$BAM_FILTERED" ] || continue
 
   BEDCOV=${OUTDIR}/coverage/${sample}_windows_1kb.bed
-  awk 'BEGIN{OFS="\t"} {print $1, $2}' ${COMPETITIVE_REF}.fai > ${OUTDIR}/coverage/genome.sizes
 
   samtools bedcov <(awk 'BEGIN{OFS="\t"} {for(i=0;i<$2;i+=1000) print $1,i,(i+1000>$2?$2:i+1000)}' ${OUTDIR}/coverage/genome.sizes) \
     ${BAM_FILTERED} > ${BEDCOV} 2> ${OUTDIR}/logs/${sample}_bedcov.log || true
