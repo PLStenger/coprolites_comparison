@@ -9,8 +9,10 @@
 #SBATCH --error=/home/plstenge/coprolites_comparison/00_scripts/14_sort_fasta.err
 #SBATCH --output=/home/plstenge/coprolites_comparison/00_scripts/14_sort_fasta.out
 
-input="/home/plstenge/coprolites_comparison/13_blast_local_existing_kraken_fastq/cop408/Alces/cop408_Alces_all_kraken.fasta"
-output="/home/plstenge/coprolites_comparison/13_blast_local_existing_kraken_fastq/cop408/Alces/cop408_Alces_all_kraken.sorted_by_length_desc.fasta"
+#input="/home/plstenge/coprolites_comparison/13_blast_local_existing_kraken_fastq/cop408/Alces/cop408_Alces_all_kraken.fasta"
+#output="/home/plstenge/coprolites_comparison/13_blast_local_existing_kraken_fastq/cop408/Alces/cop408_Alces_all_kraken.sorted_by_length_desc.fasta"
+input="/home/plstenge/coprolites_comparison/11_kraken_genus_blast_nt/cop408/Rangifer/cop408_Rangifer_all_kraken.fastq"
+output="/home/plstenge/coprolites_comparison/11_kraken_genus_blast_nt/cop408/Rangifer/cop408_Rangifer_all_kraken.sorted_by_length_desc.fasta"
 
 awk '
   /^>/ {
